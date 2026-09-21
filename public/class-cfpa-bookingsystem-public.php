@@ -4049,8 +4049,8 @@ class CFPA_Booking_System_Public {
 	public function get_stripe_test() {
 		// @TODO put in database
 		$stripe = array(
-			"secret_key"      => 'sk_test_4NIEraxYt0ECrVNUtUJG40S6',
-			"publishable_key" => 'pk_test_cK1ybMWAzj95tDOeLPHpNr5r'
+			"secret_key"      => STRIPE_TEST_KEY,
+			"publishable_key" => STRIPE_TEST_PUBLISHABLE_KEY
 		);
 		return $stripe;
 	}
@@ -4058,15 +4058,9 @@ class CFPA_Booking_System_Public {
 	public function get_stripe_live() {
 		// @TODO put in database
 		$stripe = array(
-			"secret_key"      => 'sk_live_0z0nq2mQpoA1kmpfsPNkCb9M',
-			"publishable_key" => 'pk_live_08t2x2nsJE8B35h4OhOqzOni'
+			"secret_key"      => STRIPE_LIVE_KEY,
+			"publishable_key" => STRIPE_LIVE_PUBLISHABLE_KEY
 		);
-/*
-		$stripe = array(
-			"secret_key"      => 'sk_test_4NIEraxYt0ECrVNUtUJG40S6',
-			"publishable_key" => 'pk_test_cK1ybMWAzj95tDOeLPHpNr5r'
-		);
-*/
 		return $stripe;
 	}
 
