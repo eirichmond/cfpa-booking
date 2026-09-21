@@ -199,6 +199,7 @@ class CFPA_Booking_System {
         $this->loader->add_action( 'admin_menu', $plugin_admin, 'register_reports_menu_page' );
 
         $this->loader->add_action( 'add_meta_boxes', $plugin_admin, 'add_meta_box' );
+        $this->loader->add_action( 'add_meta_boxes_class', $plugin_admin, 'remove_class_custom_fields_box', 20 );
 
         $this->loader->add_action( 'wp_ajax_nopriv_resend_invoice', $plugin_admin, 'resend_invoice' );
         $this->loader->add_action( 'wp_ajax_resend_invoice', $plugin_admin, 'resend_invoice' );

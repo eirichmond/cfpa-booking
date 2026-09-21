@@ -764,7 +764,9 @@ class CFPA_Booking_System_Admin {
 		$args = array(
 			'labels' => $labels,
 			'hierarchical' => false,
-			'supports' => array( 'title','editor' ),
+			// 'custom-fields' is required for the REST API to expose the meta registered below;
+			// the classic Custom Fields box it adds is removed in remove_class_custom_fields_box().
+			'supports' => array( 'title','editor','custom-fields' ),
 			'taxonomies' => array( 'classcat' ),
 			'public' => true,
 			'show_ui' => true,
@@ -778,10 +780,46 @@ class CFPA_Booking_System_Admin {
 			'query_var' => true,
 			'can_export' => true,
 			'rewrite' => true,
-			'capability_type' => 'post'
+			'capability_type' => 'post',
+			'show_in_rest' => true
 		);
 
 		register_post_type( 'class', $args );
+
+		$this->register_class_meta();
+	}
+
+	/**
+	 * Expose the class meta keys to the REST API / block editor.
+	 * Values are stored as strings by the CMB fields, so they are registered as such.
+	 */
+	public function register_class_meta() {
+
+		$meta_keys = array(
+			'class-ref-no',
+			'class-fee',
+			'class-min-entrants',
+			'class-entrants',
+			'class-sub-category',
+			'lower-age',
+			'upper-age',
+		);
+
+		foreach ( $meta_keys as $key ) {
+			register_post_meta( 'class', $key, array(
+				'type'         => 'string',
+				'single'       => true,
+				'show_in_rest' => true,
+			) );
+		}
+	}
+
+	/**
+	 * Keep the class edit screen as it was: class meta is managed by the CMB box,
+	 * not the generic Custom Fields box that 'custom-fields' support switches on.
+	 */
+	public function remove_class_custom_fields_box() {
+		remove_meta_box( 'postcustom', 'class', 'normal' );
 	}
 
 	// Register Custom Taxonomy
@@ -817,6 +855,7 @@ class CFPA_Booking_System_Admin {
 			'show_admin_column'          => true,
 			'show_in_nav_menus'          => true,
 			'show_tagcloud'              => true,
+			'show_in_rest'               => true,
 		);
 		register_taxonomy( 'class_cat', array( 'class' ), $args );
 
