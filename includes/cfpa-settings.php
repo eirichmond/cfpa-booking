@@ -1,0 +1,340 @@
+<?php
+/**
+ * WordPress CPFA Settings demo class
+ *
+ * @author Tareq Hasan
+ */
+if ( !class_exists('CFPA_Settings_API' ) ):
+class CFPA_Settings_API {
+    private $settings_api;
+    function __construct() {
+        $this->settings_api = new WeDevs_Settings_API;
+        add_action( 'admin_init', array($this, 'admin_init') );
+        add_action( 'admin_menu', array($this, 'admin_menu') );
+    }
+    function admin_init() {
+        //set the settings
+        $this->settings_api->set_sections( $this->get_settings_sections() );
+        $this->settings_api->set_fields( $this->get_settings_fields() );
+        //initialize settings
+        $this->settings_api->admin_init();
+    }
+    function admin_menu() {
+        add_options_page( 'CPFA Settings', 'CPFA Settings', 'delete_posts', 'cfpa_settings_api', array($this, 'plugin_page') );
+    }
+    function get_settings_sections() {
+        $sections = array(
+            // array(
+            //     'id' => 'wedevs_basics',
+            //     'title' => __( 'Basic Settings', 'wedevs' )
+            // ),
+            // array(
+            //     'id' => 'wedevs_advanced',
+            //     'title' => __( 'Advanced Settings', 'wedevs' )
+            // ),
+            // array(
+            //     'id' => 'wedevs_others',
+            //     'title' => __( 'Other Settings', 'wpuf' )
+            // ),
+            array(
+                'id' => 'wedevs_login',
+                'title' => __( 'Login Page', 'wpuf' )
+            ),
+            array(
+                'id' => 'wedevs_csv_upload',
+                'title' => __( 'CSV Upload', 'wpuf' )
+            ),
+            array(
+                'id' => 'wedevs_cfpa_advanced',
+                'title' => __( 'Advanced Settings', 'wpuf' )
+            ),
+        );
+        return $sections;
+    }
+    /**
+     * Returns all the settings fields
+     *
+     * @return array settings fields
+     */
+    function get_settings_fields() {
+        $settings_fields = array(
+            // 'wedevs_basics' => array(
+            //     array(
+            //         'name'              => 'text_val',
+            //         'label'             => __( 'Text Input', 'wedevs' ),
+            //         'desc'              => __( 'Text input description', 'wedevs' ),
+            //         'type'              => 'text',
+            //         'default'           => 'Title',
+            //         'sanitize_callback' => 'intval'
+            //     ),
+            //     array(
+            //         'name'              => 'number_input',
+            //         'label'             => __( 'Number Input', 'wedevs' ),
+            //         'desc'              => __( 'Number field with validation callback `intval`', 'wedevs' ),
+            //         'type'              => 'number',
+            //         'default'           => 'Title',
+            //         'sanitize_callback' => 'intval'
+            //     ),
+            //     array(
+            //         'name'  => 'textarea',
+            //         'label' => __( 'Textarea Input', 'wedevs' ),
+            //         'desc'  => __( 'Textarea description', 'wedevs' ),
+            //         'type'  => 'textarea'
+            //     ),
+            //     array(
+            //         'name'  => 'checkbox',
+            //         'label' => __( 'Checkbox', 'wedevs' ),
+            //         'desc'  => __( 'Checkbox Label', 'wedevs' ),
+            //         'type'  => 'checkbox'
+            //     ),
+            //     array(
+            //         'name'    => 'radio',
+            //         'label'   => __( 'Radio Button', 'wedevs' ),
+            //         'desc'    => __( 'A radio button', 'wedevs' ),
+            //         'type'    => 'radio',
+            //         'options' => array(
+            //             'yes' => 'Yes',
+            //             'no'  => 'No'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'multicheck',
+            //         'label'   => __( 'Multile checkbox', 'wedevs' ),
+            //         'desc'    => __( 'Multi checkbox description', 'wedevs' ),
+            //         'type'    => 'multicheck',
+            //         'options' => array(
+            //             'one'   => 'One',
+            //             'two'   => 'Two',
+            //             'three' => 'Three',
+            //             'four'  => 'Four'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'selectbox',
+            //         'label'   => __( 'A Dropdown', 'wedevs' ),
+            //         'desc'    => __( 'Dropdown description', 'wedevs' ),
+            //         'type'    => 'select',
+            //         'default' => 'no',
+            //         'options' => array(
+            //             'yes' => 'Yes',
+            //             'no'  => 'No'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'password',
+            //         'label'   => __( 'Password', 'wedevs' ),
+            //         'desc'    => __( 'Password description', 'wedevs' ),
+            //         'type'    => 'password',
+            //         'default' => ''
+            //     ),
+            //     array(
+            //         'name'    => 'file',
+            //         'label'   => __( 'File', 'wedevs' ),
+            //         'desc'    => __( 'File description', 'wedevs' ),
+            //         'type'    => 'file',
+            //         'default' => '',
+            //         'options' => array(
+            //             'button_label' => 'Choose Image'
+            //         )
+            //     )
+            // ),
+            // 'wedevs_advanced' => array(
+            //     array(
+            //         'name'    => 'color',
+            //         'label'   => __( 'Color', 'wedevs' ),
+            //         'desc'    => __( 'Color description', 'wedevs' ),
+            //         'type'    => 'color',
+            //         'default' => ''
+            //     ),
+            //     array(
+            //         'name'    => 'password',
+            //         'label'   => __( 'Password', 'wedevs' ),
+            //         'desc'    => __( 'Password description', 'wedevs' ),
+            //         'type'    => 'password',
+            //         'default' => ''
+            //     ),
+            //     array(
+            //         'name'    => 'wysiwyg',
+            //         'label'   => __( 'Advanced Editor', 'wedevs' ),
+            //         'desc'    => __( 'WP_Editor description', 'wedevs' ),
+            //         'type'    => 'wysiwyg',
+            //         'default' => ''
+            //     ),
+            //     array(
+            //         'name'    => 'multicheck',
+            //         'label'   => __( 'Multile checkbox', 'wedevs' ),
+            //         'desc'    => __( 'Multi checkbox description', 'wedevs' ),
+            //         'type'    => 'multicheck',
+            //         'default' => array('one' => 'one', 'four' => 'four'),
+            //         'options' => array(
+            //             'one'   => 'One',
+            //             'two'   => 'Two',
+            //             'three' => 'Three',
+            //             'four'  => 'Four'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'selectbox',
+            //         'label'   => __( 'A Dropdown', 'wedevs' ),
+            //         'desc'    => __( 'Dropdown description', 'wedevs' ),
+            //         'type'    => 'select',
+            //         'options' => array(
+            //             'yes' => 'Yes',
+            //             'no'  => 'No'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'password',
+            //         'label'   => __( 'Password', 'wedevs' ),
+            //         'desc'    => __( 'Password description', 'wedevs' ),
+            //         'type'    => 'password',
+            //         'default' => ''
+            //     ),
+            //     array(
+            //         'name'    => 'file',
+            //         'label'   => __( 'File', 'wedevs' ),
+            //         'desc'    => __( 'File description', 'wedevs' ),
+            //         'type'    => 'file',
+            //         'default' => ''
+            //     )
+            // ),
+            // 'wedevs_others' => array(
+            //     array(
+            //         'name'    => 'text',
+            //         'label'   => __( 'Text Input', 'wedevs' ),
+            //         'desc'    => __( 'Text input description', 'wedevs' ),
+            //         'type'    => 'text',
+            //         'default' => 'Title'
+            //     ),
+            //     array(
+            //         'name'  => 'textarea',
+            //         'label' => __( 'Textarea Input', 'wedevs' ),
+            //         'desc'  => __( 'Textarea description', 'wedevs' ),
+            //         'type'  => 'textarea'
+            //     ),
+            //     array(
+            //         'name'  => 'checkbox',
+            //         'label' => __( 'Checkbox', 'wedevs' ),
+            //         'desc'  => __( 'Checkbox Label', 'wedevs' ),
+            //         'type'  => 'checkbox'
+            //     ),
+            //     array(
+            //         'name'    => 'radio',
+            //         'label'   => __( 'Radio Button', 'wedevs' ),
+            //         'desc'    => __( 'A radio button', 'wedevs' ),
+            //         'type'    => 'radio',
+            //         'options' => array(
+            //             'yes' => 'Yes',
+            //             'no'  => 'No'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'multicheck',
+            //         'label'   => __( 'Multile checkbox', 'wedevs' ),
+            //         'desc'    => __( 'Multi checkbox description', 'wedevs' ),
+            //         'type'    => 'multicheck',
+            //         'options' => array(
+            //             'one'   => 'One',
+            //             'two'   => 'Two',
+            //             'three' => 'Three',
+            //             'four'  => 'Four'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'selectbox',
+            //         'label'   => __( 'A Dropdown', 'wedevs' ),
+            //         'desc'    => __( 'Dropdown description', 'wedevs' ),
+            //         'type'    => 'select',
+            //         'options' => array(
+            //             'yes' => 'Yes',
+            //             'no'  => 'No'
+            //         )
+            //     ),
+            //     array(
+            //         'name'    => 'password',
+            //         'label'   => __( 'Password', 'wedevs' ),
+            //         'desc'    => __( 'Password description', 'wedevs' ),
+            //         'type'    => 'password',
+            //         'default' => ''
+            //     ),
+            //     array(
+            //         'name'    => 'file',
+            //         'label'   => __( 'File', 'wedevs' ),
+            //         'desc'    => __( 'File description', 'wedevs' ),
+            //         'type'    => 'file',
+            //         'default' => ''
+            //     )
+            // ),
+            'wedevs_cfpa_advanced' => array(
+                array(
+                    'name'    => 'festival_entries',
+                    'label'   => __( 'Festival Entries', 'wedevs' ),
+                    'desc'    => __( 'Enable/Disable entry submissions', 'wedevs' ),
+                    'type'    => 'select',
+                    'options' => array(
+                        'enabled' => 'Enabled',
+                        'disabled'  => 'Disabled'
+                    )
+                ),
+				array(
+                    'name'    => 'festival_entries_closed_msg',
+                    'label'   => __( 'Entries Closed Msg', 'wedevs' ),
+                    'desc'    => __( 'This will display if the Entries are set to Disabled', 'wedevs' ),
+                    'type'    => 'wysiwyg',
+                    'default' => ''
+                ),
+
+            ),
+            'wedevs_login' => array(
+                array(
+                    'name'    => 'login_message',
+                    'label'   => __( 'Create Login', 'wedevs' ),
+                    'desc'    => __( 'Message displayed on the login page', 'wedevs' ),
+                    'type'    => 'wysiwyg',
+                    'default' => ''
+                ),
+            ),
+            'wedevs_csv_upload' => array(
+                array(
+                    'name'    => 'wysiwyg',
+                    'label'   => __( 'Upload Instructions', 'wedevs' ),
+                    'desc'    => __( 'Upload instructions for schools', 'wedevs' ),
+                    'type'    => 'wysiwyg',
+                    'default' => ''
+                ),
+                array(
+                    'name'    => 'file',
+                    'label'   => __( 'CSV Example File', 'wedevs' ),
+                    'desc'    => __( 'Attach the CSV example file for schools to download and use for uploading and processing multiple children', 'wedevs' ),
+                    'type'    => 'file',
+                    'default' => ''
+                )
+            ),
+        );
+        return $settings_fields;
+    }
+    function plugin_page() {
+        echo '<div class="wrap">';
+        $this->settings_api->show_navigation();
+        $this->settings_api->show_forms();
+        echo '</div>';
+    }
+    /**
+     * Get all the pages
+     *
+     * @return array page names with key value pairs
+     */
+    function get_pages() {
+        $pages = get_pages();
+        $pages_options = array();
+        if ( $pages ) {
+            foreach ($pages as $page) {
+                $pages_options[$page->ID] = $page->post_title;
+            }
+        }
+        return $pages_options;
+    }
+}
+endif;
+
+new CFPA_Settings_API();

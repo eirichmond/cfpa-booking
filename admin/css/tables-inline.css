@@ -1,0 +1,38 @@
+.red {
+    color: red;
+}
+.accordion a {
+    color: #2A6496;
+}
+.ts-pager, select.btn-sm {
+    display: inline-block;
+}
+select.btn-sm {
+    width: 50px;
+    height: 30px;
+    vertical-align: top;
+}
+.dropdown-menu {
+    min-width: 320px;
+    font-size: 12px;
+    padding: 10px;
+}
+.dropdown-menu h5 {
+    text-align: right;
+    margin-right: 4px;
+}
+div.output-download-popup {
+    margin-bottom: 5px;
+}
+.output-separator, .output-replacequotes, .output-quotes {
+    font-family: Tahoma, Geneva, sans-serif;
+    min-width: 18px;
+    height: 22px;
+}
+.output-separator-input, .output-replacequotes {
+    width: 26px;
+}
+pre {
+    /* override bootstrap setting */
+    overflow-y: hidden !important;
+}
