@@ -907,7 +907,7 @@ class CFPA_Booking_System_Admin {
 	public function performers_as_array($array) {
 
 		$array = str_replace(', ',',', $array);
-		$performers = explode(',', $array);
+		$performers = array_map(array($this, 'normalise_performer_name'), explode(',', $array));
 		return $performers;
 	}
 
@@ -952,7 +952,7 @@ class CFPA_Booking_System_Admin {
 			return;
 		}
 		foreach($authors_children as $author_child) {
-			if ($author_child->child_name == $child_name) {
+			if ($this->normalise_performer_name($author_child->child_name) == $this->normalise_performer_name($child_name)) {
 				$dob = $author_child->child_dob;
 				return $dob;
 			}
@@ -961,12 +961,38 @@ class CFPA_Booking_System_Admin {
 
 	}
 
+	/**
+	 * Performer names were saved with slashes added (O\'Kelly, sometimes several times over),
+	 * while invoice items hold them unslashed, so names are compared without backslashes.
+	 *
+	 * @param string $name performer name
+	 * @return string
+	 */
+	public function normalise_performer_name($name) {
+		return trim(str_replace('\\', '', (string) $name));
+	}
+
+	/**
+	 * One off clean up of the backslashes added to performer and group names before they were unslashed on save.
+	 * Runs once on admin_init.
+	 */
+	public function unslash_performer_names() {
+		if (get_option('cfpa_unslashed_performer_names')) {
+			return;
+		}
+		global $wpdb;
+		$children = $wpdb->query("UPDATE {$wpdb->prefix}cfpa_children SET child_name = REPLACE(child_name, CHAR(92), '') WHERE INSTR(child_name, CHAR(92)) > 0");
+		$groups = $wpdb->query("UPDATE {$wpdb->prefix}cfpa_groups SET group_name = REPLACE(group_name, CHAR(92), '') WHERE INSTR(group_name, CHAR(92)) > 0");
+		update_option('cfpa_unslashed_performer_names', current_time('mysql'), false);
+		error_log('Removed backslashes from ' . (int) $children . ' performer and ' . (int) $groups . ' group names');
+	}
+
 	public function get_child_school($authors_children, $child_name) {
 		if ($child_name == null){
 			return;
 		}
 		foreach($authors_children as $author_child) {
-			if ($author_child->child_name == $child_name) {
+			if ($this->normalise_performer_name($author_child->child_name) == $this->normalise_performer_name($child_name)) {
 				$school = $author_child->child_school;
 				if(is_numeric($school)) {
 					$spost = get_post($school);
@@ -983,7 +1009,7 @@ class CFPA_Booking_System_Admin {
 			return;
 		}
 		foreach($authors_children as $author_child) {
-			if ($author_child->child_name == $child_name) {
+			if ($this->normalise_performer_name($author_child->child_name) == $this->normalise_performer_name($child_name)) {
 				$parent_email = $author_child->parent_email;
 				return $parent_email;
 			}
