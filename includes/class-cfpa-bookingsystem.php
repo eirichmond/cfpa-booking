@@ -209,6 +209,8 @@ class CFPA_Booking_System {
 		$this->loader->add_action( 'manage_class_posts_custom_column', $plugin_admin, 'cfpa_class_column_data', 1, 10 );
 
 		$this->loader->add_filter( 'manage_edit-class_sortable_columns', $plugin_admin, 'cfpa_register_sortable_columns' );
+		$this->loader->add_action( 'pre_get_posts', $plugin_admin, 'cfpa_sort_classes_by_number' );
+		$this->loader->add_filter( 'posts_search', $plugin_admin, 'cfpa_search_classes_by_number', 10, 2 );
 		$this->loader->add_action( 'create_special_pages', $plugin_admin, 'add_special_schools' );
 
 

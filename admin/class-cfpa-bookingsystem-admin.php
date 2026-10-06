@@ -803,8 +803,49 @@ class CFPA_Booking_System_Admin {
 
 	// Register the column as sortable
 	public function cfpa_register_sortable_columns( $columns ) {
-		$columns['class-ref-no'] = 'Class ID';
+		$columns['class-ref-no'] = 'class-ref-no';
 		return $columns;
+	}
+
+	/**
+	 * Is this the main query of the admin Classes list?
+	 *
+	 * @param WP_Query $query
+	 * @return bool
+	 */
+	public function is_admin_class_list( $query ) {
+		return is_admin() && $query->is_main_query() && $query->get( 'post_type' ) === 'class';
+	}
+
+	/**
+	 * Sort the admin Classes list by class number when the Class ID column is clicked.
+	 *
+	 * @param WP_Query $query
+	 */
+	public function cfpa_sort_classes_by_number( $query ) {
+		if ( $this->is_admin_class_list( $query ) && $query->get( 'orderby' ) === 'class-ref-no' ) {
+			$query->set( 'meta_key', 'class-ref-no' );
+			$query->set( 'orderby', 'meta_value' );
+		}
+	}
+
+	/**
+	 * Let Search Classes match the class number as well as the title, e.g. "P06" or part of one like "SD1".
+	 *
+	 * @param string   $search the search SQL WordPress built for the title and content
+	 * @param WP_Query $query
+	 * @return string
+	 */
+	public function cfpa_search_classes_by_number( $search, $query ) {
+		if ( $search === '' || ! $this->is_admin_class_list( $query ) ) {
+			return $search;
+		}
+		global $wpdb;
+		$class_no = $wpdb->prepare(
+			"EXISTS ( SELECT 1 FROM {$wpdb->postmeta} cfpa_ref WHERE cfpa_ref.post_id = {$wpdb->posts}.ID AND cfpa_ref.meta_key = 'class-ref-no' AND cfpa_ref.meta_value LIKE %s )",
+			'%' . $wpdb->esc_like( trim( $query->get( 's' ) ) ) . '%'
+		);
+		return preg_replace( '/^\s*AND\s*\(/', ' AND ( ' . $class_no . ' OR ', $search, 1 );
 	}
 
 	public function cfpa_class_column_data( $columns ) {
