@@ -28,8 +28,6 @@ $total = $public_class->get_basket_totals_refactored($baskets);
 
 $total = array_sum($total);
 
-$stripe = ( defined('STRIPE_TEST') && STRIPE_TEST === true ) ? $public_class->get_stripe_test() : $public_class->get_stripe_live();
-
 $userinfo = get_userdata(get_current_user_id());
 
 $plugincss = plugin_dir_url( dirname(__FILE__)  ) . 'css/cfpa-bookingsystem-public.css';
@@ -129,28 +127,17 @@ if ($inv_status == 'unpaid') {
 
 					<?php if ($show_pay_button) { ?>
 
+						<?php if ( isset( $_GET['payment'] ) && $_GET['payment'] === 'cancelled' ) { ?>
+							<div class="default alert"><p>Payment cancelled, you have not been charged.</p></div>
+						<?php } elseif ( isset( $_GET['payment'] ) && $_GET['payment'] === 'error' ) { ?>
+							<div class="danger alert"><p>Sorry, the payment could not be started and you have not been charged. Please try again, or email <a href="mailto:info@cfpa.org.uk">info@cfpa.org.uk</a> if this keeps happening.</p></div>
+						<?php } ?>
+
 						<form action="/cfpa-user/charge/" method="POST">
-						<script
-							src="https://checkout.stripe.com/checkout.js" class="stripe-button"
-							data-key="<?php echo $stripe['publishable_key']; ?>"
-							data-name="<?php echo bloginfo('name'); ?>"
-							data-description="<?php echo bloginfo('description'); ?>"
-							data-image="<?php echo plugins_url( 'cfpa-booking/public/images/cfpa.png');?>"
-							data-name="<?php echo bloginfo('name'); ?>"
-							data-email="<?php echo $userinfo->user_email;?>"
-							data-amount="<?php echo esc_attr($total * 100); ?>"
-							data-locale="auto"
-							data-currency="GBP"
-							data-billing-address="true"
-							data-label="Pay &pound;<?php echo number_format_i18n( $total, 2 ); ?> Now"
-							>
-						</script>
-
-						<input type="hidden" name="user_id" value="<?php echo get_current_user_id(); ?>">
-						<input type="hidden" name="stripe_charge" value="<?php echo esc_attr($total * 100); ?>">
-						<input type="hidden" name="post_id" value="<?php echo esc_attr(the_id()); ?>">
-						<?php wp_nonce_field( 'purchase_cfpa', 'purchase_nonce' ); ?>
-
+							<input type="hidden" name="pay_by_card" value="1">
+							<input type="hidden" name="post_id" value="<?php echo esc_attr( get_the_ID() ); ?>">
+							<?php wp_nonce_field( 'purchase_cfpa', 'purchase_nonce' ); ?>
+							<input type="submit" class="button" value="Pay &pound;<?php echo esc_attr( number_format_i18n( $total, 2 ) ); ?> Now">
 						</form>
 
 					<?php } else { ?>

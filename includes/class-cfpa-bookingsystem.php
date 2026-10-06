@@ -302,6 +302,7 @@ class CFPA_Booking_System {
 		$this->loader->add_filter( 'wp_mail_from_name', $plugin_public, 'cfpa_mail_from_name' );
 
 		$this->loader->add_action( 'widgets_init', $plugin_public, 'register_cfpa_widgets' );
+		$this->loader->add_action( 'rest_api_init', $plugin_public, 'register_stripe_webhook_route' );
 
 		$this->loader->add_action( 'init', $plugin_public, 'remove_duplicate_schools_without_urn_post_meta' );
 

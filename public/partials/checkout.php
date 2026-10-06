@@ -10,26 +10,12 @@ $public_class = new CFPA_Booking_System_Public('CFPA_Booking_System_Public', '1.
 
 $user_id = get_current_user_id();
 
-$baskets = $public_class->get_users_basket($user_id);
+// the same calculation start_stripe_checkout() charges
+$checkout = $public_class->get_checkout_basket($user_id);
+$baskets = $checkout['items'];
+$programmes = $checkout['programmes'];
+$total = $checkout['total'];
 
-if ($public_class->check_programmes_in_basket($baskets)) {
-	$total_programmes = $public_class->get_total_programmes_in_basket($baskets);
-	$programmes = $public_class->render_programmes_in_basket($total_programmes, $baskets['basket_id']);
-	$baskets = $public_class->clear_out_programmes($baskets);
-}
-
-//$public_class->insert_basket_items(999,$baskets,$programmes);
-
-unset($baskets['basket_id']);
-
-//$basket = $public_class->rendering_group_basket_item($basket);
-$total = $public_class->get_basket_totals($baskets, $programmes);
-
-
-$total = array_sum($total);
-
-
-$stripe = ( defined('STRIPE_TEST') && STRIPE_TEST === true ) ? $public_class->get_stripe_test() : $public_class->get_stripe_live();
 
 $userinfo = get_userdata(get_current_user_id());
 $marketing_permission = get_user_meta(get_current_user_id(), 'marketing_permission', true);
@@ -119,27 +105,16 @@ get_header(); ?>
 						<p><strong>Pay Now</strong> Continue to payment to confirm your entry. In the case of large orders (typically over £200), please select Pay on Account, below.</p>
 					</div>
 
+					<?php if ( isset( $_GET['payment'] ) && $_GET['payment'] === 'cancelled' ) { ?>
+						<div class="default alert"><p>Payment cancelled, you have not been charged.</p></div>
+					<?php } elseif ( isset( $_GET['payment'] ) && $_GET['payment'] === 'error' ) { ?>
+						<div class="danger alert"><p>Sorry, the payment could not be started and you have not been charged. Please try again, or email <a href="mailto:info@cfpa.org.uk">info@cfpa.org.uk</a> if this keeps happening.</p></div>
+					<?php } ?>
+
 					<form action="/cfpa-user/charge/" method="POST">
-					  <script
-					    src="https://checkout.stripe.com/checkout.js" class="stripe-button"
-					    data-key="<?php echo $stripe['publishable_key']; ?>"
-					    data-name="<?php echo bloginfo('name'); ?>"
-					    data-description="<?php echo bloginfo('description'); ?>"
-					    data-image="<?php echo plugins_url( 'cfpa-booking/public/images/cfpa.png');?>"
-					    data-name="<?php echo bloginfo('name'); ?>"
-					    data-email="<?php echo $userinfo->user_email;?>"
-					    data-amount="<?php echo esc_attr($total * 100); ?>"
-					    data-locale="auto"
-					    data-currency="GBP"
-					    data-billing-address="true"
-					    data-label="Pay &pound;<?php echo number_format_i18n( $total, 2 ); ?> Now"
-					    >
-					  </script>
-
-					  <input type="hidden" name="user_id" value="<?php echo get_current_user_id(); ?>">
-					  <input type="hidden" name="stripe_charge" value="<?php echo esc_attr($total * 100); ?>">
+					  <input type="hidden" name="pay_by_card" value="1">
 					  <?php wp_nonce_field( 'purchase_cfpa', 'purchase_nonce' ); ?>
-
+					  <input type="submit" class="button" value="Pay &pound;<?php echo esc_attr( number_format_i18n( $total, 2 ) ); ?> Now">
 					</form>
 
 					<?php if (get_user_meta($user_id, 'pay_by_invoice', true) || current_user_can( 'administrator' )) { ?>
