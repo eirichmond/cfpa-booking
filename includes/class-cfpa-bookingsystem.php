@@ -300,6 +300,7 @@ class CFPA_Booking_System {
 
 		$this->loader->add_filter( 'wp_mail_from', $plugin_public, 'cfpa_wp_mail_from' );
 		$this->loader->add_filter( 'wp_mail_from_name', $plugin_public, 'cfpa_mail_from_name' );
+		$this->loader->add_action( 'phpmailer_init', $plugin_public, 'cfpa_mail_return_path' );
 
 		$this->loader->add_action( 'widgets_init', $plugin_public, 'register_cfpa_widgets' );
 		$this->loader->add_action( 'rest_api_init', $plugin_public, 'register_stripe_webhook_route' );

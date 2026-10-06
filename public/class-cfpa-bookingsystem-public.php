@@ -558,6 +558,19 @@ class CFPA_Booking_System_Public {
 		return get_option('admin_email');
 	}
 
+	/**
+	 * Use the From address (admin_email, see cfpa_wp_mail_from()) as the envelope sender / Return-Path.
+	 * Otherwise the server's own address (r02.hostsvr.net) is used, so SPF passes for the wrong domain
+	 * and fails DMARC alignment. Needs the sending server in the cfpa.org.uk SPF record.
+	 *
+	 * @param PHPMailer\PHPMailer\PHPMailer $phpmailer the mailer about to send.
+	 */
+	public function cfpa_mail_return_path( $phpmailer ) {
+		if ( empty( $phpmailer->Sender ) && is_email( $phpmailer->From ) ) {
+			$phpmailer->Sender = $phpmailer->From;
+		}
+	}
+
 	public function cfpa_mail_from_name( $name ) {
 		//Make sure the email is from the same domain
 		//as your website to avoid being marked as spam.
