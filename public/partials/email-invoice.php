@@ -8,9 +8,12 @@
 	$invoice_items = $this->add_programmes_pandp($post_id,$invoice_items);
 	$invoice_status = get_post_meta($post_id, 'inv_status', true);
 
+	// festival information sent with every order confirmation, paid or on account
+	$festival_information = 'Please note that this year, all music tracks for Dance classes must be uploaded to the website between 1st December and 1st April. The timetable of classes will be published on the Festival website on 1st March. Headteacher approval will be required for all under 16 year olds who attend the Festival during the school day. See website for more details.';
+
 	$invoice_message = array(
-		'paid' => 'Your payment was completed successfully. Please note that this year, all music tracks for Dance classes must be uploaded to the website between 1st December and 1st April. The timetable of classes will be published on the Festival website on 1st March. Headteacher approval will be required for all under 16 year olds who attend the Festival during the school day. See website for more details. Below are the details of your order:',
-		'unpaid' => 'Your order was completed successfully and an invoice has been created for you to pay on account, here are the details of your order:'
+		'paid' => 'Your payment was completed successfully. ' . $festival_information . ' Below are the details of your order:',
+		'unpaid' => 'Your order was completed successfully and an invoice has been created for you to pay on account. ' . $festival_information . ' Below are the details of your order:'
 	);
 
 

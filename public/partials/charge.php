@@ -2,6 +2,7 @@
 
 $public_class = new CFPA_Booking_System_Public('CFPA_Booking_System_Public', '1.0.2');
 $payment_result = '';
+$on_account = false;
 
 if ( isset( $_GET['session_id'] ) ) {
 
@@ -21,6 +22,7 @@ if ( isset( $_GET['session_id'] ) ) {
 
 	// pay on account
 	$public_class->process_cfpa_payment($_POST);
+	$on_account = true;
 
 }
 
@@ -61,6 +63,9 @@ get_header(); ?>
 							<div class="danger alert">
 								<p>Sorry, we could not confirm your payment. If your card has been charged your entry is safe, but please email <a href="mailto:info@cfpa.org.uk">info@cfpa.org.uk</a> so we can check it for you. Otherwise please return to <a href="/cfpa-user/checkout/">checkout</a> and try again.</p>
 							</div>
+						<?php } elseif ( $on_account ) { ?>
+							<p>Thank you for your order. A confirmation of your entry will now be emailed to you. An invoice will be emailed to you later.</p>
+							<p>The email may end up in your Junk/ Spam mail folder, so please be sure to check there if it is not in your inbox.</p>
 						<?php } else {
 							the_content();
 						} ?>
