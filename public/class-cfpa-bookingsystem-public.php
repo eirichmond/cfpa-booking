@@ -1030,7 +1030,7 @@ class CFPA_Booking_System_Public {
 					$dob = sanitize_text_field($_POST['child_dob_year']) . '-' . sanitize_text_field($_POST['child_dob_month']) . '-' . sanitize_text_field($_POST['child_dob_date']);
 
 
-					$child_name = sanitize_text_field($_POST['child_name']);
+					$child_name = sanitize_text_field(wp_unslash($_POST['child_name']));
 					$child_school = sanitize_text_field($_POST["input_child_school_id"]);
 					$child_licence_agreed = $_POST['child_licence_agreed'] ? $_POST["child_licence_agreed"] : null;
 					$headmaster_approval_agreed = $_POST['headmaster_approval_agreed'] ? $_POST["headmaster_approval_agreed"] : null;
@@ -1076,7 +1076,7 @@ class CFPA_Booking_System_Public {
 					$dob = sanitize_text_field($_POST['child_dob_year']) . '-' . sanitize_text_field($_POST['child_dob_month']) . '-' . sanitize_text_field($_POST['child_dob_date']);
 
 					$child_id = sanitize_text_field($_POST['child_id']);
-					$child_name = sanitize_text_field($_POST['child_name']);
+					$child_name = sanitize_text_field(wp_unslash($_POST['child_name']));
 					$child_school = sanitize_text_field($_POST['input_child_school_id']);
 					$child_licence_agreed = $_POST['child_licence_agreed'] ? $_POST["child_licence_agreed"] : null;
 					$headmaster_approval_agreed = $_POST['headmaster_approval_agreed'] ? $_POST["headmaster_approval_agreed"] : null;

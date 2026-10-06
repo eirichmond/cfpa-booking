@@ -197,6 +197,7 @@ class CFPA_Booking_System {
 		$this->loader->add_action( 'widgets_init', $plugin_admin, 'cfpa_booking_widgets_init' );
 
         $this->loader->add_action( 'admin_menu', $plugin_admin, 'register_reports_menu_page' );
+        $this->loader->add_action( 'admin_init', $plugin_admin, 'unslash_performer_names' );
 
         $this->loader->add_action( 'add_meta_boxes', $plugin_admin, 'add_meta_box' );
         $this->loader->add_action( 'add_meta_boxes_class', $plugin_admin, 'remove_class_custom_fields_box', 20 );
