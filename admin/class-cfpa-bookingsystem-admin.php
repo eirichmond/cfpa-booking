@@ -169,12 +169,368 @@ class CFPA_Booking_System_Admin {
 		 */
 		add_submenu_page( 'edit.php?post_type=school', 'Import Schools CSV', 'Import CSV', 'manage_options', 'import-schools-csv', array( $this, 'cfpa_import_schools_csv') );
 
+		/**
+		 * addtional items to class custom post type menu
+		 */
+		add_submenu_page( 'edit.php?post_type=class', 'Import Classes CSV', 'Import CSV', 'manage_options', 'import-classes-csv', array( $this, 'cfpa_import_classes_csv') );
+
 	}
 
 	/** add additional menu item to custom post type menu */
 	public function cfpa_import_schools_csv() {
 		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-schools-csv.php');
 
+	}
+
+	/** add additional menu item to class custom post type menu */
+	public function cfpa_import_classes_csv() {
+		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-classes-csv.php');
+
+	}
+
+	/**
+	 * Column headers expected in the classes CSV, mapped to the field they populate.
+	 *
+	 * @return array header (lowercase) => field key
+	 */
+	public function class_csv_columns() {
+		return array(
+			'id'                 => 'id',
+			'class title'        => 'title',
+			'category'           => 'category',
+			'class no'           => 'class-ref-no',
+			'class fee'          => 'class-fee',
+			'class min entrants' => 'class-min-entrants',
+			'class entrants'     => 'class-entrants',
+			'class sub category' => 'class-sub-category',
+			'lower age'          => 'lower-age',
+			'upper age'          => 'upper-age',
+		);
+	}
+
+	/**
+	 * Read an uploaded CSV into rows keyed by field.
+	 *
+	 * Handles files saved by Excel on Mac (Mac Roman) or Windows (Windows-1252) as well as UTF-8,
+	 * and normalises non-breaking spaces and curly quotes so titles match those already stored.
+	 *
+	 * @param string $path    path to the uploaded file
+	 * @param array  $columns header => field map, see class_csv_columns()
+	 * @return array|WP_Error rows ( line number => array field => value )
+	 */
+	public function read_class_csv( $path, $columns ) {
+
+		$raw = file_get_contents( $path );
+		if ( $raw === false || trim( $raw ) === '' ) {
+			return new WP_Error( 'empty', 'The file is empty or could not be read.' );
+		}
+
+		// strip a UTF-8 BOM, then convert legacy encodings
+		if ( substr( $raw, 0, 3 ) === "\xEF\xBB\xBF" ) {
+			$raw = substr( $raw, 3 );
+		}
+		if ( ! mb_check_encoding( $raw, 'UTF-8' ) ) {
+			// Windows-1252 smart quotes/dashes live in 0x91-0x97, Mac Roman ones in 0xCA/0xD0-0xD5
+			$windows   = preg_match_all( '/[\x91-\x97]/', $raw );
+			$mac_roman = preg_match_all( '/[\xCA\xD0-\xD5]/', $raw );
+			$encoding  = $windows > $mac_roman ? 'WINDOWS-1252' : 'MACINTOSH';
+			$converted = iconv( $encoding, 'UTF-8//TRANSLIT', $raw );
+			if ( $converted === false ) {
+				return new WP_Error( 'encoding', 'The file could not be converted to UTF-8. Please save it as "CSV UTF-8" and try again.' );
+			}
+			$raw = $converted;
+		}
+
+		$raw   = str_replace( array( "\r\n", "\r" ), "\n", $raw );
+		$lines = explode( "\n", $raw );
+
+		$header = array_map( function( $heading ) {
+			return strtolower( trim( $heading ) );
+		}, str_getcsv( array_shift( $lines ), ',', '"', '\\' ) );
+
+		$missing = array_diff( array_keys( $columns ), $header );
+		if ( $missing ) {
+			return new WP_Error( 'header', 'Missing column(s): ' . implode( ', ', $missing ) . '. Expected: ' . implode( ', ', array_keys( $columns ) ) . '.' );
+		}
+
+		$rows = array();
+		foreach ( $lines as $index => $line ) {
+			if ( trim( $line ) === '' ) {
+				continue;
+			}
+			$values = str_getcsv( $line, ',', '"', '\\' );
+			$row    = array();
+			foreach ( $columns as $heading => $field ) {
+				$value = isset( $values[ array_search( $heading, $header ) ] ) ? $values[ array_search( $heading, $header ) ] : '';
+				$value = str_replace( array( "\xC2\xA0", "\xE2\x80\x98", "\xE2\x80\x99", "\xE2\x80\x9C", "\xE2\x80\x9D" ), array( ' ', "'", "'", '"', '"' ), $value );
+				$row[ $field ] = trim( preg_replace( '/\s+/', ' ', $value ) );
+			}
+			// +2: header is line 1 and $index is zero based
+			$rows[ $index + 2 ] = $row;
+		}
+
+		if ( empty( $rows ) ) {
+			return new WP_Error( 'no_rows', 'The file has a header but no rows.' );
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Check every row of the classes CSV before anything is written.
+	 *
+	 * @param array  $rows rows from read_class_csv()
+	 * @param string $mode 'update' (new and updated classes) or 'unpublish' (deleted classes)
+	 * @return array line number => array of error messages
+	 */
+	public function validate_class_csv_rows( $rows, $mode ) {
+
+		$errors     = array();
+		$class_nos  = array();
+		$ids        = array();
+		$categories = wp_list_pluck( get_terms( array( 'taxonomy' => 'class_cat', 'hide_empty' => false ) ), 'name' );
+
+		foreach ( $rows as $line => $row ) {
+
+			$row_errors = array();
+
+			if ( $row['id'] !== '' ) {
+				if ( ! ctype_digit( $row['id'] ) || get_post_type( (int) $row['id'] ) !== 'class' ) {
+					$row_errors[] = 'Id ' . $row['id'] . ' is not an existing class.';
+				} elseif ( isset( $ids[ $row['id'] ] ) ) {
+					$row_errors[] = 'Id ' . $row['id'] . ' is also on line ' . $ids[ $row['id'] ] . '.';
+				} else {
+					$ids[ $row['id'] ] = $line;
+				}
+			}
+
+			if ( $mode === 'update' && $row['id'] === '' && $row['class-ref-no'] !== '' && count( $this->find_classes_by_ref_no( $row['class-ref-no'], $rows ) ) > 1 ) {
+				$row_errors[] = 'More than one existing class has class no ' . $row['class-ref-no'] . ', please add the Id.';
+			}
+
+			if ( $mode === 'unpublish' ) {
+				if ( $row['id'] === '' ) {
+					$row_errors[] = 'Id is required to remove a class.';
+				} elseif ( empty( $row_errors ) && $row['class-ref-no'] !== '' && get_post_meta( (int) $row['id'], 'class-ref-no', true ) !== $row['class-ref-no'] ) {
+					$row_errors[] = 'Class no ' . $row['class-ref-no'] . ' does not match class ' . $row['id'] . ' (' . get_post_meta( (int) $row['id'], 'class-ref-no', true ) . ').';
+				}
+				if ( $row_errors ) {
+					$errors[ $line ] = $row_errors;
+				}
+				continue;
+			}
+
+			if ( $row['title'] === '' ) {
+				$row_errors[] = 'Class title is empty.';
+			}
+			if ( ! in_array( $row['category'], $categories, true ) ) {
+				$row_errors[] = 'Category "' . $row['category'] . '" must be one of ' . implode( ', ', $categories ) . '.';
+			}
+			if ( $row['class-ref-no'] === '' ) {
+				$row_errors[] = 'Class no is empty.';
+			} elseif ( isset( $class_nos[ $row['class-ref-no'] ] ) ) {
+				$row_errors[] = 'Class no ' . $row['class-ref-no'] . ' is also on line ' . $class_nos[ $row['class-ref-no'] ] . '.';
+			} else {
+				$class_nos[ $row['class-ref-no'] ] = $line;
+			}
+			if ( ! is_numeric( $row['class-fee'] ) || $row['class-fee'] < 0 ) {
+				$row_errors[] = 'Class fee "' . $row['class-fee'] . '" is not a number.';
+			}
+			if ( $row['class-entrants'] !== 'g' && ! $this->is_int_between( $row['class-entrants'], 1, 10 ) ) {
+				$row_errors[] = 'Class entrants "' . $row['class-entrants'] . '" must be 1 to 10 or g.';
+			}
+			if ( $row['class-min-entrants'] !== '' && ! $this->is_int_between( $row['class-min-entrants'], 1, 10 ) ) {
+				$row_errors[] = 'Class min entrants "' . $row['class-min-entrants'] . '" must be blank or 1 to 10.';
+			}
+			if ( $row['class-sub-category'] === '' ) {
+				$row_errors[] = 'Class sub category is empty.';
+			}
+			foreach ( array( 'lower-age' => 'Lower age', 'upper-age' => 'Upper age' ) as $field => $label ) {
+				if ( $row[ $field ] !== '' && ! $this->is_int_between( $row[ $field ], 0, 99 ) ) {
+					$row_errors[] = $label . ' "' . $row[ $field ] . '" must be blank or a whole number.';
+				}
+			}
+			if ( $row['lower-age'] !== '' && $row['upper-age'] !== '' && (int) $row['lower-age'] > (int) $row['upper-age'] ) {
+				$row_errors[] = 'Lower age is above upper age.';
+			}
+
+			if ( $row_errors ) {
+				$errors[ $line ] = $row_errors;
+			}
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * Find classes (in any status) with a class no, ignoring classes the CSV updates by Id
+	 * as those may be renumbered by the same file.
+	 *
+	 * @param string $class_no class-ref-no to look for
+	 * @param array  $rows     rows from read_class_csv()
+	 * @return array post IDs
+	 */
+	public function find_classes_by_ref_no( $class_no, $rows ) {
+		return array_values( array_diff( get_posts( array(
+			'post_type'      => 'class',
+			'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+			'meta_key'       => 'class-ref-no',
+			'meta_value'     => $class_no,
+			'fields'         => 'ids',
+			'posts_per_page' => -1,
+		) ), array_map( 'intval', array_filter( wp_list_pluck( $rows, 'id' ) ) ) ) );
+	}
+
+	/**
+	 * @return bool true if $value is a whole number string between $min and $max
+	 */
+	private function is_int_between( $value, $min, $max ) {
+		return ctype_digit( (string) $value ) && (int) $value >= $min && (int) $value <= $max;
+	}
+
+	/**
+	 * Create or update classes from the "New and Updated Classes" CSV.
+	 * Rows with a blank Id are created; others update the class with that post ID.
+	 *
+	 * @param array $rows    validated rows from read_class_csv()
+	 * @param bool  $dry_run when true nothing is written, the changes are only reported
+	 * @return array list of changes ( line, action, id, class_no, title, changes )
+	 */
+	public function import_class_csv_rows( $rows, $dry_run ) {
+
+		$meta_keys = array( 'class-ref-no', 'class-fee', 'class-min-entrants', 'class-entrants', 'class-sub-category', 'lower-age', 'upper-age' );
+		$results   = array();
+
+		wp_defer_term_counting( true );
+
+		foreach ( $rows as $line => $row ) {
+
+			$term    = get_term_by( 'name', $row['category'], 'class_cat' );
+			$changes = array();
+
+			// a blank Id with a class no that already exists (e.g. the file was imported before) updates that class
+			if ( $row['id'] === '' ) {
+				$existing = $this->find_classes_by_ref_no( $row['class-ref-no'], $rows );
+				if ( count( $existing ) === 1 ) {
+					$row['id'] = (string) $existing[0];
+				}
+			}
+
+			if ( $row['id'] === '' ) {
+
+				$action  = 'created';
+				$post_id = 0;
+				$changes = array( 'Category' => array( '', $row['category'] ) );
+
+				if ( ! $dry_run ) {
+					$post_id = wp_insert_post( array(
+						'post_title'  => $row['title'],
+						'post_status' => 'publish',
+						'post_type'   => 'class',
+					), true );
+					if ( is_wp_error( $post_id ) ) {
+						$results[] = array( 'line' => $line, 'action' => 'error', 'id' => '', 'class_no' => $row['class-ref-no'], 'title' => $row['title'], 'changes' => array( 'Error' => array( '', $post_id->get_error_message() ) ) );
+						continue;
+					}
+				}
+
+			} else {
+
+				$post_id = (int) $row['id'];
+				$post    = get_post( $post_id );
+
+				if ( $post->post_title !== $row['title'] ) {
+					$changes['Title'] = array( $post->post_title, $row['title'] );
+				}
+				if ( $post->post_status !== 'publish' ) {
+					$changes['Status'] = array( $post->post_status, 'publish' );
+				}
+				$current_terms = wp_get_object_terms( $post_id, 'class_cat', array( 'fields' => 'names' ) );
+				if ( $current_terms !== array( $row['category'] ) ) {
+					$changes['Category'] = array( implode( ', ', $current_terms ), $row['category'] );
+				}
+
+				$action = 'updated';
+
+				if ( ! $dry_run && ( isset( $changes['Title'] ) || isset( $changes['Status'] ) ) ) {
+					wp_update_post( array(
+						'ID'          => $post_id,
+						'post_title'  => $row['title'],
+						'post_status' => 'publish',
+					) );
+				}
+			}
+
+			foreach ( $meta_keys as $key ) {
+				$current = $post_id ? (string) get_post_meta( $post_id, $key, true ) : '';
+				if ( $current === $row[ $key ] && $action !== 'created' ) {
+					continue;
+				}
+				$changes[ $key ] = array( $current, $row[ $key ] );
+				if ( ! $dry_run ) {
+					update_post_meta( $post_id, $key, $row[ $key ] );
+				}
+			}
+
+			if ( ! $dry_run && isset( $changes['Category'] ) && $term ) {
+				wp_set_object_terms( $post_id, (int) $term->term_id, 'class_cat' );
+			}
+
+			if ( $action === 'updated' && empty( $changes ) ) {
+				$action = 'unchanged';
+			}
+
+			$results[] = array(
+				'line'     => $line,
+				'action'   => $action,
+				'id'       => $post_id ? $post_id : '',
+				'class_no' => $row['class-ref-no'],
+				'title'    => $row['title'],
+				'changes'  => $changes,
+			);
+		}
+
+		wp_defer_term_counting( false );
+
+		return $results;
+	}
+
+	/**
+	 * Remove classes listed in the "Deleted Classes" CSV from the ordering system.
+	 * Classes are set to draft rather than deleted so past invoices and entry reports still resolve them.
+	 *
+	 * @param array $rows    validated rows from read_class_csv()
+	 * @param bool  $dry_run when true nothing is written
+	 * @return array list of changes, see import_class_csv_rows()
+	 */
+	public function unpublish_class_csv_rows( $rows, $dry_run ) {
+
+		$results = array();
+
+		foreach ( $rows as $line => $row ) {
+
+			$post    = get_post( (int) $row['id'] );
+			$action  = $post->post_status === 'publish' ? 'removed' : 'unchanged';
+			$changes = $action === 'removed' ? array( 'Status' => array( $post->post_status, 'draft' ) ) : array();
+
+			if ( ! $dry_run && $action === 'removed' ) {
+				wp_update_post( array(
+					'ID'          => $post->ID,
+					'post_status' => 'draft',
+				) );
+			}
+
+			$results[] = array(
+				'line'     => $line,
+				'action'   => $action,
+				'id'       => $post->ID,
+				'class_no' => get_post_meta( $post->ID, 'class-ref-no', true ),
+				'title'    => $post->post_title,
+				'changes'  => $changes,
+			);
+		}
+
+		return $results;
 	}
 
 	public function cfpa_class_column($columns) {

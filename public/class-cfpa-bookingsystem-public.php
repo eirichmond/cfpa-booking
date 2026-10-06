@@ -4086,22 +4086,6 @@ class CFPA_Booking_System_Public {
 
 	}
 
-	public function delete_classes_callback() {
-		$classes = array('96','98','107','112','125','126','129','134','136','178','179','180','181','182','183','184','185','186','187','188','189','190','191','192','193','194','195','196','197','198','199','2154','5209');
-		foreach ($classes as $id) {
-			// Delete post meta
-			$post_meta_keys = get_post_custom_keys($id);
-			if ($post_meta_keys) {
-				foreach ($post_meta_keys as $key) {
-					delete_post_meta($id, $key);
-				}
-			}
-
-			// Delete the post
-			wp_delete_post($id, true); // Set the second parameter to true to force delete
-		}
-	}
-
     // Method to register all shortcodes
     public function register_shortcodes() {
         add_shortcode('show_content', array($this, 'display_content_shortcode'));
