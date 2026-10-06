@@ -383,7 +383,7 @@
     Redux::setSection( $opt_name, array(
         'title' => __( 'Performer Settings', 'cfpa-options' ),
         'id'    => 'performer-settings',
-        'desc'  => __( 'Perfomer Settings.', 'cfpa-options' ),
+        'desc'  => __( 'Performer Settings.', 'cfpa-options' ),
         'icon'  => 'el el-user'
     ) );
 

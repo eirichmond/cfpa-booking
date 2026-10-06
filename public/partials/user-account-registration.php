@@ -26,7 +26,6 @@ get_header(); ?>
 					<?php the_title( '<h1 class="entry-title">', '</h1>' ); ?>
 
 					<p>Please fill in the form below to register your account.</p>
-					<p>If you do not receive an email confirmation when registering an account, please contact info@cfpa.org.uk for help.</p>
 
 					<hr />
 
@@ -39,6 +38,7 @@ get_header(); ?>
 							<p>Thank you for registering!</p>
 							<p>Please check your inbox for details on how to login.</p>
 							<p>The email may end up in your Junk/ Spam mail folder, so please be sure to check there if it is not in your inbox.</p>
+							<p>If you do not receive an email, please contact <a href="mailto:info@cfpa.org.uk">info@cfpa.org.uk</a> for help.</p>
 						</div>
 					<?php } ?>
 
