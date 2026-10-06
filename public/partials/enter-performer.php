@@ -118,8 +118,8 @@ get_header(); ?>
 									<div class="col span_10_of_12">
 
 										<div id="tutor-teacher" class="input-field">
-											<p for="class-mentor">Please enter the name of the tutor/teacher for this class, if any (optional)</p>
-											<input type="text" id="class-mentor" name="tutor_teacher" placeholder="Tutor/teacher" value="">
+											<p for="class-mentor">Please enter the name of the tutor / teacher / dance school for this class, if any (optional)</p>
+											<input type="text" id="class-mentor" name="tutor_teacher" placeholder="Tutor / Teacher / Dance School (optional)" value="">
 										</div>
 
 									</div>

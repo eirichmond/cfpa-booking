@@ -416,7 +416,7 @@ class CFPA_Booking_System_Public {
 
 				<div class="input-field select-field">
 					<select class="additional-entrant" id="additiona-entrant-<?php echo esc_html($x); ?>" name="childname" required>
-						<option value="" selected>Perfomer <?php echo esc_html($x); ?></option>
+						<option value="" selected>Performer <?php echo esc_html($x); ?></option>
 						<?php foreach ($children as $k => $v) { ?>
 							<option value="<?php echo esc_attr( $k );?>" <?php $this->check_performance_disabled($k); ?> data-min="<?php echo esc_html( $minmax['min'] );?>" data-max="<?php echo esc_html( $minmax['max'] );?>"><?php echo esc_html( $v );?><?php $this->check_performance_disabled($k, true); ?></option>
 						<?php } ?>

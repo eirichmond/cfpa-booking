@@ -439,6 +439,9 @@ get_header(); ?>
 												<div class="input-field col span_6_of_12">
 													<label class="" for="<?php echo esc_attr($profile['key']); ?>"><?php echo esc_html($profile['label']); ?></label>
 													<input type="<?php echo esc_attr($profile['type']); ?>" name="<?php echo esc_attr($profile['key']); ?>" placeholder="<?php echo esc_attr($profile['placeholder']); ?>" value="<?php echo esc_attr($group->group_name); ?>">
+													<?php if ($profile['key'] == 'group_name') { ?>
+														<p><small>Please name dance groups as &lsquo;Dance School - Dance Name&rsquo; so that they can be matched up with the correct music backing track when the backing track is uploaded.</small></p>
+													<?php } ?>
 												</div>
 
 											<?php } ?>
@@ -480,6 +483,9 @@ get_header(); ?>
 										<div class="input-field col span_6_of_12">
 											<label class="" for="<?php echo esc_attr($profile['key']); ?>"><?php echo esc_html($profile['label']); ?></label>
 											<input type="<?php echo esc_attr($profile['type']); ?>" name="<?php echo esc_attr($profile['key']); ?>" placeholder="<?php echo esc_attr($profile['placeholder']); ?>" value="">
+											<?php if ($profile['key'] == 'group_name') { ?>
+												<p><small>Please name dance groups as &lsquo;Dance School - Dance Name&rsquo; so that they can be matched up with the correct music backing track when the backing track is uploaded.</small></p>
+											<?php } ?>
 										</div>
 									<?php } ?>
 									<?php if ($profile['type'] == 'number') { ?>

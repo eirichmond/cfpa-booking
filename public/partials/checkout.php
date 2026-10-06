@@ -102,7 +102,7 @@ get_header(); ?>
 					<br>
 
 					<div class="option">
-						<p><strong>Pay Now</strong> Continue to payment to confirm your entry. In the case of large orders (typically over £200), please select Pay on Account, below.</p>
+						<p><strong>Pay Now</strong> Continue to payment to confirm your entry. In the case of difficulty paying for orders (typically those over £200), please select Pay on Account, below. If the Pay on Account button is absent, please email <a href="mailto:info@cfpa.org.uk">info@cfpa.org.uk</a> to enable it.</p>
 					</div>
 
 					<?php if ( isset( $_GET['payment'] ) && $_GET['payment'] === 'cancelled' ) { ?>
