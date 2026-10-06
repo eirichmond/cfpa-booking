@@ -1128,14 +1128,36 @@ class CFPA_Booking_System_Admin {
 		// set the term year for later uses of DOB as at 31st Aug this term
 		$term_year = date('Y', strtotime($date));
 
+		if (empty($invoices)) {
+			return $entries;
+		}
+
+		// load everything the rows need in a few queries up front, rather than several queries per row
+		$invoice_ids = wp_list_pluck($invoices, 'ID');
+		$author_ids = array_unique(array_map('intval', wp_list_pluck($invoices, 'post_author')));
+		cache_users($author_ids);
+		$children_by_author = $this->get_report_children($author_ids);
+		$invoice_totals = $this->get_report_invoice_totals($invoice_ids);
+		$groups_by_author = $this->get_report_groups($author_ids);
+
+		$class_ids = array();
+		foreach ($invoices as $invoice) {
+			foreach (get_post_meta($invoice->ID, 'inv_item') as $inv_item) {
+				$class_ids[] = (int) $inv_item['class_id'];
+			}
+		}
+		_prime_post_caches(array_unique($class_ids), true, true);
+
+		$performer_keys = array('one', 'two', 'three', 'four');
+
 		$i = 0;
 		foreach($invoices as $invoice) {
 			$inv_items = get_post_meta( $invoice->ID, 'inv_item' );
 			$inv_status = get_post_meta( $invoice->ID, 'inv_status', true );
 			$author_id = $invoice->post_author;
 			$author_data = get_userdata( $author_id );
-			//var_dump($author_data);
-			$authors_children = $this->get_authors_children($author_id);
+			$authors_children = isset($children_by_author[$author_id]) ? $children_by_author[$author_id] : array();
+			$invoice_total = isset($invoice_totals[$invoice->ID]) ? $invoice_totals[$invoice->ID] : null;
 
 			foreach ($inv_items as $inv_item) {
 				$entries[$i]['class_id'] = $inv_item['class_id'];
@@ -1145,40 +1167,24 @@ class CFPA_Booking_System_Admin {
 				$entries[$i]['class_fee'] = number_format( intval(get_post_meta( $inv_item['class_id'], 'class-fee', true )) ,2);
 				$performers = $this->performers_as_array($inv_item['performers']);
 
-				$entries[$i]['class_performer_one'] = $performers[0];
-				$entries[$i]['class_performer_one_school'] = $this->get_child_school($authors_children, $performers[0]);
-				$entries[$i]['class_performer_one_dob'] = $this->get_child_dob_by_name($authors_children, $performers[0]);
-				$entries[$i]['class_performer_one_qualifying_age'] = $this->get_performers_age($term_year,$this->get_child_dob_by_name($authors_children, $performers[0]));
-				$entries[$i]['class_performer_one_parent_email'] = $this->get_child_parent_email($authors_children, $performers[0]);
-
 				$is_group = $this->check_if_group_class($inv_item['class_id']);
-				if($is_group) {
-					$no_in_group = $this->get_number_of_group_members($author_id);
-					$entries[$i]['class_category'] = $no_in_group[0]['group_number'];
-				} else {
-					$entries[$i]['class_category'] = ucfirst($this->get_class_category($inv_item['class_id']));
-				}
 
-				if (count($performers) >= 2) {
-					$entries[$i]['class_performer_two'] = $performers[1];
-					$entries[$i]['class_performer_two_school'] = $this->get_child_school($authors_children, $performers[1]);
-					$entries[$i]['class_performer_two_dob'] = $this->get_child_dob_by_name($authors_children, $performers[1]);
-					$entries[$i]['class_performer_two_qualifying_age'] = $this->get_performers_age($term_year,$this->get_child_dob_by_name($authors_children, $performers[1]));
-					$entries[$i]['class_performer_two_parent_email'] = $this->get_child_parent_email($authors_children, $performers[1]);
-				}
-				if (count($performers) >= 3) {
-					$entries[$i]['class_performer_three'] = $performers[2];
-					$entries[$i]['class_performer_three_school'] = $this->get_child_school($authors_children, $performers[2]);
-					$entries[$i]['class_performer_three_dob'] = $this->get_child_dob_by_name($authors_children, $performers[2]);
-					$entries[$i]['class_performer_three_qualifying_age'] = $this->get_performers_age($term_year,$this->get_child_dob_by_name($authors_children, $performers[2]));
-					$entries[$i]['class_performer_three_parent_email'] = $this->get_child_parent_email($authors_children, $performers[2]);
-				}
-				if (count($performers) >= 4) {
-					$entries[$i]['class_performer_four'] = $performers[3];
-					$entries[$i]['class_performer_four_school'] = $this->get_child_school($authors_children, $performers[3]);
-					$entries[$i]['class_performer_four_dob'] = $this->get_child_dob_by_name($authors_children, $performers[3]);
-					$entries[$i]['class_performer_four_qualifying_age'] = $this->get_performers_age($term_year,$this->get_child_dob_by_name($authors_children, $performers[3]));
-					$entries[$i]['class_performer_four_parent_email'] = $this->get_child_parent_email($authors_children, $performers[3]);
+				// the first performer is always output, partners only when present
+				foreach (array_slice($performer_keys, 0, max(1, min(4, count($performers)))) as $n => $key) {
+					$details = $this->get_report_performer_details($authors_children, $performers[$n], $term_year);
+					$entries[$i]['class_performer_' . $key] = $performers[$n];
+					$entries[$i]['class_performer_' . $key . '_school'] = $details['school'];
+					$entries[$i]['class_performer_' . $key . '_dob'] = $details['dob'];
+					$entries[$i]['class_performer_' . $key . '_qualifying_age'] = $details['age'];
+					$entries[$i]['class_performer_' . $key . '_parent_email'] = $details['email'];
+
+					if ($n === 0) {
+						if($is_group) {
+							$entries[$i]['class_category'] = $this->get_report_group_number($groups_by_author, $author_id, $performers[0]);
+						} else {
+							$entries[$i]['class_category'] = ucfirst($this->get_class_category($inv_item['class_id']));
+						}
+					}
 				}
 
 				$entries[$i]['author_title'] = get_user_meta( $author_id, 'salutation', true );
@@ -1194,38 +1200,162 @@ class CFPA_Booking_System_Admin {
 				$entries[$i]['author_tel'] = get_user_meta( $author_id, 'telephone', true );
 				$entries[$i]['marketing_permission'] = get_user_meta( $author_id, 'marketing_permission', true );
 				$entries[$i]['invoice_ref'] = get_the_title( $invoice->ID );
-				$entries[$i]['invoice_cost'] = number_format($this->get_invoice_total($invoice->ID) / 100, 2);
+				$entries[$i]['invoice_cost'] = number_format($invoice_total / 100, 2);
 				$entries[$i]['invoice_status'] = $inv_status;
 				$entries[$i]['invoice_paid_date'] = $invoice->post_date;
-				//var_dump($performers);
 				$i++;
 			}
-			//var_dump($inv_items);
 		}
-		//var_dump($entries);
 		return $entries;
+	}
+
+	/**
+	 * Performers for several accounts in one query, indexed by account and normalised name.
+	 * When an account has two performers with the same name the oldest one is used, as before.
+	 * Numeric schools are primed so their titles don't need a query each.
+	 *
+	 * @param array $author_ids user IDs
+	 * @return array user ID => normalised name => performer row
+	 */
+	public function get_report_children($author_ids) {
+		global $wpdb;
+		$author_ids = array_map('intval', $author_ids);
+		$children = $wpdb->get_results(
+			"SELECT child_id, child_name, user_id, registered_date, child_dob, child_exception_date, last_edit, child_school, parent_email
+			FROM {$wpdb->prefix}cfpa_children
+			WHERE user_id IN (" . implode(',', $author_ids) . ")
+			ORDER BY child_id"
+		);
+
+		$by_author = array();
+		$school_ids = array();
+		foreach ($children as $child) {
+			$name = $this->normalise_performer_name($child->child_name);
+			if (!isset($by_author[$child->user_id][$name])) {
+				$by_author[$child->user_id][$name] = $child;
+			}
+			if (is_numeric($child->child_school)) {
+				$school_ids[] = (int) $child->child_school;
+			}
+		}
+		_prime_post_caches(array_unique($school_ids), false, false);
+
+		return $by_author;
+	}
+
+	/**
+	 * School, DOB, age and parent email for one performer on a report row.
+	 *
+	 * @param array  $authors_children normalised name => performer row, from get_report_children()
+	 * @param string $name             performer name from the invoice item
+	 * @param string $term_year        year of the 31st August the age is taken at
+	 * @return array school, dob, age, email
+	 */
+	public function get_report_performer_details($authors_children, $name, $term_year) {
+		$child = null;
+		if ($name !== null && $name !== '') {
+			$normalised = $this->normalise_performer_name($name);
+			$child = isset($authors_children[$normalised]) ? $authors_children[$normalised] : null;
+		}
+
+		$school = $child ? $child->child_school : null;
+		if ($child && is_numeric($school)) {
+			$spost = get_post($school);
+			$school = $spost ? $spost->post_title : null;
+		}
+		$dob = $child ? $child->child_dob : null;
+
+		return array(
+			'school' => $school,
+			'dob' => $dob,
+			'age' => $this->get_performers_age($term_year, $dob),
+			'email' => $child ? $child->parent_email : null,
+		);
+	}
+
+	/**
+	 * Purchase totals for several invoices in one query (the last purchase row wins, as in get_invoice_total()).
+	 *
+	 * @param array $invoice_ids invoice post IDs
+	 * @return array invoice ID => total in pence
+	 */
+	public function get_report_invoice_totals($invoice_ids) {
+		global $wpdb;
+		$rows = $wpdb->get_results(
+			"SELECT post_id, purchase_cost
+			FROM {$wpdb->prefix}cfpa_purchases
+			WHERE post_id IN (" . implode(',', array_map('intval', $invoice_ids)) . ")
+			ORDER BY invoice_id"
+		);
+		$totals = array();
+		foreach ($rows as $row) {
+			$totals[$row->post_id] = $row->purchase_cost;
+		}
+		return $totals;
+	}
+
+	/**
+	 * Groups for several accounts in one query, indexed by account and normalised group name.
+	 *
+	 * @param array $author_ids user IDs
+	 * @return array user ID => normalised name => group_number
+	 */
+	public function get_report_groups($author_ids) {
+		global $wpdb;
+		$rows = $wpdb->get_results(
+			"SELECT user_id, group_name, group_number
+			FROM {$wpdb->prefix}cfpa_groups
+			WHERE user_id IN (" . implode(',', array_map('intval', $author_ids)) . ")
+			ORDER BY group_id"
+		);
+		$groups = array();
+		foreach ($rows as $row) {
+			$name = $this->normalise_performer_name($row->group_name);
+			if (!isset($groups[$row->user_id][$name])) {
+				$groups[$row->user_id][$name] = $row->group_number;
+			}
+		}
+		return $groups;
+	}
+
+	/**
+	 * Number in the group entered on a report row. Matched on the group name; previously
+	 * get_number_of_group_members() always gave the account's first group, which was wrong
+	 * for accounts with several groups. Falls back to that when the name isn't found.
+	 *
+	 * @param array  $groups_by_author from get_report_groups()
+	 * @param int    $author_id        account
+	 * @param string $group_name       group name from the invoice item
+	 * @return string|null
+	 */
+	public function get_report_group_number($groups_by_author, $author_id, $group_name) {
+		if (empty($groups_by_author[$author_id])) {
+			return null;
+		}
+		$name = $this->normalise_performer_name($group_name);
+		if (isset($groups_by_author[$author_id][$name])) {
+			return $groups_by_author[$author_id][$name];
+		}
+		return reset($groups_by_author[$author_id]);
 	}
 
 	public function report_for_invoices($date = null) {
 		global $wpdb;
-		$tablename = $wpdb->prefix;
 
 		$enddate = date('Y-m-d', strtotime($date . ' + 1 year')) . ' 00:00:00';
 
 		if ($date) {
-			$sql = $wpdb->prepare( "SELECT ID, post_author FROM {$wpdb->prefix}posts WHERE post_type = %s AND post_date >= '{$date}' AND post_date <= '{$enddate}'",'invoice' );
+			$sql = $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_date >= %s AND post_date <= %s", 'invoice', $date, $enddate );
 		} else {
-			$sql = $wpdb->prepare( "SELECT ID, post_author FROM {$wpdb->prefix}posts WHERE post_type = %s",'invoice' );
+			$sql = $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", 'invoice' );
 		}
 
-		$results = $wpdb->get_results( $sql , ARRAY_A );
+		$ids = array_map('intval', $wpdb->get_col( $sql ));
 
-		$invoices = array();
-		foreach ($results as $result) {
-			$invoices[] = get_post($result['ID']);
-		}
+		// load the invoice posts and their meta in bulk rather than one query each
+		_prime_post_caches($ids, false, true);
 
-		return $invoices;
+		return array_map('get_post', $ids);
 	}
 
 	public function report_for_classes() {
