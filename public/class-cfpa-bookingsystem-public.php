@@ -439,10 +439,17 @@ class CFPA_Booking_System_Public {
 			)
 		);
 		$age = $this->get_performers_age($performer[0]->child_dob);
-		$upper_age = intval( get_post_meta($_POST["classid"], 'upper-age', true) );
-		if($age > $upper_age || $performer[0]->child_school == '' ) {
+		$lower_age = get_post_meta($_POST["classid"], 'lower-age', true);
+		$upper_age = get_post_meta($_POST["classid"], 'upper-age', true);
+
+		// a blank age limit means no limit, as in get_qualifying_classes()
+		$outside_age = ( ! empty($lower_age) && $age < intval($lower_age) ) || ( ! empty($upper_age) && $age > intval($upper_age) );
+		// the Place of Education is only required under 17, as in get_qualifying_classes_by_id()
+		$missing_school = $age < 17 && $performer[0]->child_school == '';
+
+		if($outside_age || $missing_school) {
 			if($append) {
-				echo $age > $upper_age ? ' - Disabled due to age eligibility requirements' : ' - Disabled due to Performer\'s Place of Education missing';
+				echo $outside_age ? ' - Disabled due to age eligibility requirements' : ' - Disabled due to Performer\'s Place of Education missing';
 			} else {
 				echo 'disabled';
 			}
