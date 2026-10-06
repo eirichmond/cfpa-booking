@@ -3539,55 +3539,242 @@ class CFPA_Booking_System_Public {
 	}
 
 	/**
-	 * Create a payment and charge via stripe.
+	 * Load the Stripe library and set the secret key for the current mode.
+	 *
+	 * @return array the keys for the current mode, see get_stripe_test() / get_stripe_live()
+	 */
+	public function stripe_setup() {
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/lib/stripe-php/init.php';
+		$stripe = ( defined('STRIPE_TEST') && STRIPE_TEST === true ) ? $this->get_stripe_test() : $this->get_stripe_live();
+		\Stripe\Stripe::setApiKey( $stripe['secret_key'] );
+		return $stripe;
+	}
+
+	/**
+	 * The current user's basket and its total, as shown on the checkout page.
+	 *
+	 * @param int $user_id the account holder.
+	 * @return array baskets (as stored, including basket_id), items (classes only), programmes, total (pounds)
+	 */
+	public function get_checkout_basket( $user_id ) {
+		$baskets = $this->get_users_basket( $user_id );
+		$items = $baskets;
+		$programmes = null;
+
+		if ( $this->check_programmes_in_basket( $items ) ) {
+			$total_programmes = $this->get_total_programmes_in_basket( $items );
+			$programmes = $this->render_programmes_in_basket( $total_programmes, $items['basket_id'] );
+			$items = $this->clear_out_programmes( $items );
+		}
+		unset( $items['basket_id'] );
+
+		return array(
+			'baskets'    => $baskets,
+			'items'      => $items,
+			'programmes' => $programmes,
+			'total'      => array_sum( $this->get_basket_totals( $items, $programmes ) ),
+		);
+	}
+
+	/**
+	 * Start a card payment on Stripe's hosted payment page, which handles 3D Secure / bank authorisation.
+	 * Pays either the current user's basket or, when post_id is posted, an unpaid invoice.
+	 * Redirects to Stripe, or back with ?payment=error if the payment can't be started.
 	 *
 	 * @param array $post_data an array of data from $_POST.
-	 * echo a span comma separated performer names.
 	 */
-	public function stripe_create_charge($stripeToken, $stripeEmail, $stripe_charge ) {
+	public function start_stripe_checkout( $post_data ) {
 
-		$informations = array();
+		$invoice_id = isset( $post_data['post_id'] ) ? (int) $post_data['post_id'] : 0;
+		$return_url = $invoice_id ? get_permalink( $invoice_id ) : home_url( '/cfpa-user/checkout/' );
 
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/lib/stripe-php-3.22.0/init.php';
+		try {
+			if ( $invoice_id ) {
+				$invoice = get_post( $invoice_id );
+				if ( ! $invoice || $invoice->post_type !== 'invoice' || get_post_meta( $invoice_id, 'inv_status', true ) !== 'unpaid' ) {
+					throw new Exception( 'Invoice ' . $invoice_id . ' is not an unpaid invoice.' );
+				}
+				$amount = (int) round( array_sum( $this->get_basket_totals_refactored( get_post_meta( $invoice_id, 'inv_item' ) ) ) * 100 );
+				$description = 'Invoice ' . $invoice->post_title;
+				$metadata = array( 'cfpa_type' => 'invoice', 'user_id' => (int) $invoice->post_author, 'invoice_id' => $invoice_id );
+			} else {
+				$checkout = $this->get_checkout_basket( get_current_user_id() );
+				if ( empty( $checkout['items'] ) ) {
+					throw new Exception( 'Basket for user ' . get_current_user_id() . ' is empty.' );
+				}
+				$amount = (int) round( $checkout['total'] * 100 );
+				$description = count( $checkout['items'] ) . ' festival ' . _n( 'entry', 'entries', count( $checkout['items'] ) );
+				$metadata = array( 'cfpa_type' => 'basket', 'user_id' => get_current_user_id(), 'basket_id' => $checkout['baskets']['basket_id'] );
+			}
 
-		$stripe = ( defined('STRIPE_TEST') && STRIPE_TEST === true ) ? $this->get_stripe_test() : $this->get_stripe_live();
+			$this->stripe_setup();
 
-		\Stripe\Stripe::setApiKey($stripe['secret_key']);
+			$session_args = array(
+				'mode'                       => 'payment',
+				'billing_address_collection' => 'required',
+				'line_items'                 => array(
+					array(
+						'quantity'   => 1,
+						'price_data' => array(
+							'currency'     => 'gbp',
+							'unit_amount'  => $amount,
+							'product_data' => array( 'name' => get_bloginfo( 'name' ) . ': ' . $description ),
+						),
+					),
+				),
+				'metadata'                   => $metadata,
+				'payment_intent_data'        => array( 'description' => $description, 'metadata' => $metadata ),
+				'success_url'                => home_url( '/cfpa-user/charge/' ) . '?session_id={CHECKOUT_SESSION_ID}',
+				'cancel_url'                 => add_query_arg( 'payment', 'cancelled', $return_url ),
+			);
+			if ( is_user_logged_in() ) {
+				$session_args['customer_email'] = wp_get_current_user()->user_email;
+			}
 
-		// take payment
-		$token  = $stripeToken;
+			$session = \Stripe\Checkout\Session::create( $session_args );
 
-		if ($token) {
-			$informations[] = 'Token created successfully!';
-		} else {
-			$informations[] = 'Unable to create Token!';
+			// keep exactly what is being paid for, the basket can change in another tab before payment completes
+			if ( ! $invoice_id ) {
+				update_option( 'cfpa_stripe_basket_' . $session->id, $checkout['baskets'], false );
+			}
+
+		} catch ( Exception $e ) {
+			error_log( 'Stripe payment could not be started: ' . $e->getMessage() );
+			wp_safe_redirect( add_query_arg( 'payment', 'error', $return_url ) );
+			exit;
 		}
 
-		$customer = \Stripe\Customer::create(array(
-		  'email' => $stripeEmail,
-		  'card'  => $token
-		));
+		wp_redirect( $session->url, 303 );
+		exit;
+	}
 
-		if ($customer) {
-			$informations[] = 'Customer created successfully!';
-		} else {
-			$informations[] = 'Unable to create Customer!';
+	/**
+	 * Handle the return from Stripe's payment page (charge page with ?session_id=).
+	 *
+	 * @param string $session_id the Checkout Session ID Stripe added to the success URL.
+	 * @return string 'paid' or 'error'
+	 */
+	public function complete_stripe_checkout( $session_id ) {
+		try {
+			$this->stripe_setup();
+			$session = \Stripe\Checkout\Session::retrieve( $session_id );
+		} catch ( Exception $e ) {
+			error_log( 'Stripe session ' . $session_id . ' could not be retrieved: ' . $e->getMessage() );
+			return 'error';
 		}
 
-		$charge = \Stripe\Charge::create(array(
-		  'customer' => $customer->id,
-		  'amount'   => $stripe_charge,
-		  'currency' => 'gbp'
-		));
-
-		if ($charge) {
-			$informations[] = 'Payment was made successfully!';
-			$informations['charged'] = true;
-		} else {
-			$informations[] = 'There was an error, please consult the administrator and check the Stripe logs!';
+		if ( $session->payment_status !== 'paid' ) {
+			error_log( 'Stripe session ' . $session_id . ' returned with payment status ' . $session->payment_status );
+			return 'error';
 		}
 
-		return $informations;
+		$this->fulfil_stripe_checkout( $session );
+		return 'paid';
+	}
+
+	/**
+	 * Record a completed Stripe payment: create the paid invoice for a basket, or mark an existing invoice paid.
+	 * Called from both the success page and the webhook, so it acts only once per session.
+	 *
+	 * @param \Stripe\Checkout\Session $session a paid Checkout Session.
+	 * @return int|false the invoice ID, 0 if another request is recording it, or false on failure
+	 */
+	public function fulfil_stripe_checkout( $session ) {
+
+		if ( $session->payment_status !== 'paid' || empty( $session->metadata->cfpa_type ) ) {
+			return false;
+		}
+
+		// add_option() fails when the option already exists, so only the first request gets past here
+		$marker = 'cfpa_stripe_fulfilled_' . $session->id;
+		if ( ! add_option( $marker, 'processing', '', false ) ) {
+			return (int) get_option( $marker );
+		}
+
+		try {
+			$metadata = $session->metadata;
+			$address = $session->customer_details && $session->customer_details->address ? $session->customer_details->address : null;
+			$country_code = $address ? $address->country : '';
+
+			$post_data = array(
+				'user_id'                         => (int) $metadata->user_id,
+				'stripe_charge'                   => $session->amount_total,
+				'stripeBillingAddressLine1'       => $address ? $address->line1 : '',
+				'stripeBillingAddressZip'         => $address ? $address->postal_code : '',
+				'stripeBillingAddressCity'        => $address ? $address->city : '',
+				'stripeBillingAddressCountry'     => $country_code === 'GB' ? 'United Kingdom' : $country_code,
+				'stripeBillingAddressCountryCode' => $country_code,
+			);
+
+			if ( $metadata->cfpa_type === 'invoice' ) {
+				$post_data['post_id'] = (int) $metadata->invoice_id;
+				$invoice_id = $this->update_purchase_record( $post_data, array(), true );
+			} else {
+				$baskets = get_option( 'cfpa_stripe_basket_' . $session->id );
+				if ( ! $baskets ) {
+					throw new Exception( 'No basket saved for this payment.' );
+				}
+				$invoice_id = $this->update_purchase_record( $post_data, $baskets, true );
+				$this->remove_basket( $baskets['basket_id'] );
+				delete_option( 'cfpa_stripe_basket_' . $session->id );
+			}
+
+			update_post_meta( $invoice_id, 'stripe_session_id', $session->id );
+			update_post_meta( $invoice_id, 'stripe_payment_intent', $session->payment_intent );
+			update_option( $marker, $invoice_id, false );
+
+			return (int) $invoice_id;
+
+		} catch ( Exception $e ) {
+			// let the webhook or a reload try again
+			delete_option( $marker );
+			error_log( 'Stripe session ' . $session->id . ' (paid ' . $session->amount_total . 'p) could not be recorded: ' . $e->getMessage() );
+			return false;
+		}
+	}
+
+	/**
+	 * Stripe webhook, POST /wp-json/cfpa/v1/stripe-webhook.
+	 */
+	public function register_stripe_webhook_route() {
+		register_rest_route( 'cfpa/v1', '/stripe-webhook', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'handle_stripe_webhook' ),
+			'permission_callback' => '__return_true',
+		) );
+	}
+
+	/**
+	 * Record payments from Stripe's checkout.session.completed event, in case the customer
+	 * never returns to the success page (closed the tab, lost connection).
+	 * The request is only trusted once its signature is verified with the webhook secret.
+	 *
+	 * @param WP_REST_Request $request the webhook request.
+	 * @return WP_REST_Response
+	 */
+	public function handle_stripe_webhook( $request ) {
+		$stripe = $this->stripe_setup();
+
+		if ( empty( $stripe['webhook_secret'] ) ) {
+			error_log( 'Stripe webhook received but no webhook secret is configured in wp-config.php' );
+			return new WP_REST_Response( array( 'error' => 'Webhook not configured' ), 500 );
+		}
+
+		try {
+			$event = \Stripe\Webhook::constructEvent( $request->get_body(), $request->get_header( 'stripe_signature' ), $stripe['webhook_secret'] );
+		} catch ( Exception $e ) {
+			return new WP_REST_Response( array( 'error' => 'Invalid signature' ), 400 );
+		}
+
+		if ( in_array( $event->type, array( 'checkout.session.completed', 'checkout.session.async_payment_succeeded' ), true ) ) {
+			$session = $event->data->object;
+			if ( $this->fulfil_stripe_checkout( $session ) === false && $session->payment_status === 'paid' && ! empty( $session->metadata->cfpa_type ) ) {
+				// ask Stripe to retry later
+				return new WP_REST_Response( array( 'error' => 'Payment could not be recorded' ), 500 );
+			}
+		}
+
+		return new WP_REST_Response( array( 'received' => true ), 200 );
 	}
 
 	/**
@@ -3906,6 +4093,8 @@ class CFPA_Booking_System_Public {
 				)
 			);
 		}
+
+		return $post_id;
 	}
 
 
@@ -3941,21 +4130,10 @@ class CFPA_Booking_System_Public {
 
 		} else {
 
+			// card payments go through Stripe Checkout, see start_stripe_checkout(); this is pay on account
 			$baskets = $this->get_users_basket($post_data['user_id']);
-
-			if (isset($post_data['stripe_charge']) && !empty($post_data['stripe_charge'])) {
-				$informations = $this->stripe_create_charge($post_data['stripeToken'], $post_data['stripeEmail'], $post_data['stripe_charge']);
-
-				// update purchase records
-				if ($informations['charged'] == true) {
-					$this->update_purchase_record($post_data, $baskets, $paid = true);
-					$this->remove_basket($baskets['basket_id']);
-				}
-
-			} else {
-				$this->update_purchase_record($post_data, $baskets, $paid = false);
-				$this->remove_basket($baskets['basket_id']);
-			}
+			$this->update_purchase_record($post_data, $baskets, $paid = false);
+			$this->remove_basket($baskets['basket_id']);
 
 
 
@@ -4078,7 +4256,8 @@ class CFPA_Booking_System_Public {
 		// @TODO put in database
 		$stripe = array(
 			"secret_key"      => STRIPE_TEST_KEY,
-			"publishable_key" => STRIPE_TEST_PUBLISHABLE_KEY
+			"publishable_key" => STRIPE_TEST_PUBLISHABLE_KEY,
+			"webhook_secret"  => defined('STRIPE_TEST_WEBHOOK_SECRET') ? STRIPE_TEST_WEBHOOK_SECRET : ''
 		);
 		return $stripe;
 	}
@@ -4087,7 +4266,8 @@ class CFPA_Booking_System_Public {
 		// @TODO put in database
 		$stripe = array(
 			"secret_key"      => STRIPE_LIVE_KEY,
-			"publishable_key" => STRIPE_LIVE_PUBLISHABLE_KEY
+			"publishable_key" => STRIPE_LIVE_PUBLISHABLE_KEY,
+			"webhook_secret"  => defined('STRIPE_LIVE_WEBHOOK_SECRET') ? STRIPE_LIVE_WEBHOOK_SECRET : ''
 		);
 		return $stripe;
 	}
