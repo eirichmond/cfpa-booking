@@ -94,6 +94,7 @@ class CFPA_Booking_System_Admin {
 		|| $screen->id == 'reports_page_entries-2024'
 		|| $screen->id == 'reports_page_entries-2025'
 		|| $screen->id == 'reports_page_entries-2026'
+		|| $screen->id == 'reports_page_entries-2027'
 		) {
 
 			wp_enqueue_style( $this->CFPA_Booking_System . '-bootstrap-css', plugin_dir_url( __FILE__ ) . 'css/bootstrap.min.css', array(), $this->version, 'all' );
@@ -160,6 +161,7 @@ class CFPA_Booking_System_Admin {
 		add_submenu_page( plugin_dir_path( __FILE__ ) . 'partials/cfpa-reports.php', 'Entries 2024', 'Entries 2024', 'manage_options', 'entries-2023', array( $this, 'cfpa_entries_2024') );
 		add_submenu_page( plugin_dir_path( __FILE__ ) . 'partials/cfpa-reports.php', 'Entries 2025', 'Entries 2025', 'manage_options', 'entries-2025', array( $this, 'cfpa_entries_2025') );
 		add_submenu_page( plugin_dir_path( __FILE__ ) . 'partials/cfpa-reports.php', 'Entries 2026', 'Entries 2026', 'manage_options', 'entries-2026', array( $this, 'cfpa_entries_2026') );
+		add_submenu_page( plugin_dir_path( __FILE__ ) . 'partials/cfpa-reports.php', 'Entries 2027', 'Entries 2027', 'manage_options', 'entries-2027', array( $this, 'cfpa_entries_2027') );
 
 
 		/**
@@ -869,6 +871,10 @@ class CFPA_Booking_System_Admin {
 
 	public function cfpa_entries_2026() {
 		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-entries-2026.php');
+	}
+
+	public function cfpa_entries_2027() {
+		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-entries-2027.php');
 	}
 
 	public function report_for_invoice_headers() {

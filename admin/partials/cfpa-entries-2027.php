@@ -12,17 +12,17 @@
 $admin_class = new CFPA_Booking_System_Admin('Booking System', '1.0.2');
 $public_class = new CFPA_Booking_System_Public('Booking System', '1.0.2');
 
-// entries for the 2026 festival open after 1 September 2025
-$entries = $admin_class->report_for_entries('2025-09-01 00:00:00');
+// entries for the 2027 festival open after 1 September 2026
+$entries = $admin_class->report_for_entries('2026-09-01 00:00:00');
 
 
-$entry_headers = $admin_class->report_for_entry_headers('2025');
+$entry_headers = $admin_class->report_for_entry_headers('2026');
 ?>
 
 <div class="wrap">
 
     <div id="icon-options-general" class="icon32"></div>
-    <h2><span class="dashicons dashicons-admin-page"></span> Entries - 2026</h2>
+    <h2><span class="dashicons dashicons-admin-page"></span> Entries - 2027</h2>
 
     <div id="poststuff">
 
@@ -39,7 +39,7 @@ $entry_headers = $admin_class->report_for_entry_headers('2025');
                         <div class="inside">
 
                             <div id="myTable" class="tablesorter">
-                                <h4>All entries for the 2026 festival</h4>
+                                <h4>All entries for the 2027 festival</h4>
                                 <div class="btn-group">
                                     <button type="button" class="btn btn-default reset">Reset</button> <!-- targeted by the "filter_reset" option -->
 
