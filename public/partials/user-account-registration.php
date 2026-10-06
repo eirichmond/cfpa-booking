@@ -5,6 +5,12 @@ $public_class->process_form();
 
 $profiles = $public_class->user_profile_inputs_fields();
 $user_id = get_current_user_id();
+$registration_error = CFPA_Booking_System_Public::$registration_error;
+
+// keep what was typed when registration failed
+$posted = function( $key ) use ( $registration_error ) {
+	return $registration_error && isset( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : '';
+};
 
 get_header(); ?>
 
@@ -36,30 +42,36 @@ get_header(); ?>
 						</div>
 					<?php } ?>
 
+					<?php if ( $registration_error ) { ?>
+						<div class="danger alert">
+							<p><?php echo wp_kses_post( $registration_error ); ?></p>
+						</div>
+					<?php } ?>
+
 					<div class="register"<?php if (isset($_GET) && $_GET['registered'] ==  true) { ?>style="display:none"<?php } ?>>
 
-						<form id="register" method="post" action="?registered=1">
+						<form id="register" method="post" action="">
 
 							<?php foreach($profiles as $profile) { ?>
 
 									<?php if ($profile['type'] == 'text') {  ?>
 									<div class="input-field">
-										<input type="<?php echo esc_attr($profile['type']); ?>" name="<?php echo esc_attr($profile['key']); ?>" placeholder="<?php echo esc_attr($profile['label']); ?>" value="">
+										<input type="<?php echo esc_attr($profile['type']); ?>" name="<?php echo esc_attr($profile['key']); ?>" placeholder="<?php echo esc_attr($profile['label']); ?>" value="<?php echo esc_attr( $posted( $profile['key'] ) ); ?>">
 									</div>
 									<?php } ?>
 
 									<?php if ($profile['type'] == 'email') { ?>
 									<div class="input-field">
-										<input class="required" type="<?php echo esc_attr($profile['type']); ?>" name="<?php echo esc_attr($profile['key']); ?>" placeholder="<?php echo esc_attr($profile['label']); ?>" value="">
+										<input class="required" type="<?php echo esc_attr($profile['type']); ?>" name="<?php echo esc_attr($profile['key']); ?>" placeholder="<?php echo esc_attr($profile['label']); ?>" value="<?php echo esc_attr( $posted( $profile['key'] ) ); ?>">
 									</div>
 									<?php } ?>
 
 									<?php if ($profile['type'] == 'select') { ?>
 									<div class="input-field select-field">
 										<select name="<?php echo esc_html($profile['key']); ?>">
-											<option value="" disabled selected>Select Role</option>
+											<option value="" disabled <?php selected( $posted( $profile['key'] ), '' ); ?>>Select Role</option>
 											<?php foreach($profile['options'] as $key => $value) { ?>
-												<option value="<?php echo esc_attr($key); ?>"><?php echo esc_attr($value); ?></option>
+												<option value="<?php echo esc_attr($key); ?>" <?php selected( $posted( $profile['key'] ), (string) $key ); ?>><?php echo esc_attr($value); ?></option>
 											<?php } ?>
 
 										</select>

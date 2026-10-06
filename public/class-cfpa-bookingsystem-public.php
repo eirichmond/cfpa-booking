@@ -41,6 +41,14 @@ class CFPA_Booking_System_Public {
 	private $version;
 
 	/**
+	 * Error from the last "register-profile" submission, shown by the user-account-registration partial.
+	 * Static because the form is processed by the instance hooked to process_form, not the partial's own instance.
+	 *
+	 * @var string
+	 */
+	public static $registration_error = '';
+
+	/**
 	 * Initialize the class and set its properties.
 	 *
 	 * @since    1.0.2
@@ -1217,52 +1225,65 @@ class CFPA_Booking_System_Public {
 						}
 
 
-						$user_name = esc_attr( $_POST['first_name'] ) . ' ' . esc_attr( $_POST['last_name'] );
+						$first_name = sanitize_text_field( wp_unslash( $_POST['first_name'] ) );
+						$last_name = sanitize_text_field( wp_unslash( $_POST['last_name'] ) );
+						$email = sanitize_email( wp_unslash( $_POST['email'] ) );
 
+						// the username is "First Last", sanitised the same way wp_insert_user() will store it (O'Brien becomes OBrien)
+						$user_name = sanitize_user( $first_name . ' ' . $last_name, true );
 
 						// setup new user
 						$userdata = array(
 							'user_login' => $user_name,
-							'user_email' => esc_attr( $_POST['email'] ),
-							'first_name' => esc_attr( $_POST['first_name'] ),
-							'last_name' => esc_attr( $_POST['last_name'] ),
+							'user_email' => $email,
+							'first_name' => $first_name,
+							'last_name' => $last_name,
 							'role' => $user_role,
 						);
 
-						// setup some error checks
-						if ( empty($userdata['user_login']) )
-							$error = '<div class="default alert">A username is required for registration.</div>';
-						elseif ( username_exists($userdata['user_login']) )
-							$error = '<div class="default alert">Sorry, that username already exists!</div>';
-						elseif ( !is_email($userdata['user_email']) )
-							$error = '<div class="default alert">You must enter a valid email address.</div>';
-						elseif ( email_exists($userdata['user_email']) )
-							$error = '<div class="default alert">Sorry, that email address is already used!</div>';
-						// setup new users and send notification
-						else {
+						$error = '';
+						if ( $first_name === '' || $last_name === '' ) {
+							$error = 'Please enter your first name and last name.';
+						} elseif ( ! is_email( $email ) ) {
+							$error = 'Please enter a valid email address.';
+						} elseif ( email_exists( $email ) ) {
+							$error = 'An account with the email address ' . esc_html( $email ) . ' already exists. Please log in, or use <a href="' . esc_url( wp_lostpassword_url() ) . '">Lost your password?</a> to reset your password.';
+						} elseif ( username_exists( $user_name ) ) {
+							$error = 'An account with the name ' . esc_html( $user_name ) . ' already exists. If this is you, please log in, or use <a href="' . esc_url( wp_lostpassword_url() ) . '">Lost your password?</a> to reset your password. Otherwise please register with a variation of your name, for example including a middle initial.';
+						} else {
 							$new_user = wp_insert_user( $userdata );
-							$new_user_metas = array(
-								'salutation' => $_POST['salutation'],
-								'user_position' => $_POST['user_position'],
-								'address_1' => $_POST['address_1'],
-								'address_2' => $_POST['address_2'],
-								'address_3' => $_POST['address_3'],
-								'town' => $_POST['town'],
-								'city' => $_POST['city'],
-								'postcode' => $_POST['postcode'],
-								'telephone' => $_POST['telephone'],
-								'alt_telephone' => $_POST['alt_telephone'],
-								'_first_time_login' => true,
-								);
-							foreach ($new_user_metas as $k => $v) {
-								update_user_meta( $new_user, $k, $v );
+							if ( is_wp_error( $new_user ) ) {
+								error_log( 'Registration failed for ' . $user_name . ': ' . $new_user->get_error_message() );
+								$error = 'Sorry, your account could not be created: ' . esc_html( $new_user->get_error_message() ) . ' Please contact info@cfpa.org.uk for help.';
 							}
-							wp_new_user_notification($new_user, 'both');
 						}
 
-						if ($error) {
-							return $error;
+						if ( $error ) {
+							self::$registration_error = $error;
+							return;
 						}
+
+						$new_user_metas = array(
+							'salutation' => $_POST['salutation'],
+							'user_position' => $_POST['user_position'],
+							'address_1' => $_POST['address_1'],
+							'address_2' => $_POST['address_2'],
+							'address_3' => $_POST['address_3'],
+							'town' => $_POST['town'],
+							'city' => $_POST['city'],
+							'postcode' => $_POST['postcode'],
+							'telephone' => $_POST['telephone'],
+							'alt_telephone' => $_POST['alt_telephone'],
+						);
+						foreach ($new_user_metas as $k => $v) {
+							update_user_meta( $new_user, $k, sanitize_text_field( wp_unslash( $v ) ) );
+						}
+						update_user_meta( $new_user, '_first_time_login', true );
+						wp_new_user_notification($new_user, 'both');
+
+						// only show the success message once the account really exists
+						wp_safe_redirect( add_query_arg( 'registered', '1', get_permalink() ) );
+						exit;
 
 					}
 				}
