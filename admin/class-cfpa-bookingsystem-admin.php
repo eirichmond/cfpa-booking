@@ -178,13 +178,42 @@ class CFPA_Booking_System_Admin {
 
 	/** add additional menu item to custom post type menu */
 	public function cfpa_import_schools_csv() {
-		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-schools-csv.php');
+		$import = array(
+			'title'     => 'Import Schools CSV',
+			'page'      => 'edit.php?post_type=school&page=import-schools-csv',
+			'transient' => 'cfpa_school_import_',
+			'columns'   => $this->school_csv_columns(),
+			'modes'     => array( 'update' => 'Schools list for the online system' ),
+			'ref_label' => 'URN',
+			'help'      => 'Columns: URN, EstablishmentName, EstablishmentTypeGroup (code), EstablishmentTypeGroup (name), Location. Schools not in the file are hidden from the list users choose from, but kept so existing performers still show their school.',
+			'validate'  => array( $this, 'validate_school_csv_rows' ),
+			'run'       => function( $rows, $mode, $dry_run ) {
+				return $this->import_school_csv_rows( $rows, $dry_run );
+			},
+		);
+		include plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-csv.php';
 
 	}
 
 	/** add additional menu item to class custom post type menu */
 	public function cfpa_import_classes_csv() {
-		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-classes-csv.php');
+		$import = array(
+			'title'     => 'Import Classes CSV',
+			'page'      => 'edit.php?post_type=class&page=import-classes-csv',
+			'transient' => 'cfpa_class_import_',
+			'columns'   => $this->class_csv_columns(),
+			'modes'     => array(
+				'update'    => 'New and updated classes',
+				'unpublish' => 'Deleted classes (remove from ordering)',
+			),
+			'ref_label' => 'Class no',
+			'help'      => 'Columns: Id, Class title, Category, Class no, Class fee, Class min entrants, Class entrants, Class sub category, Lower age, Upper age. Leave Id blank for a new class; leave an age blank for no limit.',
+			'validate'  => array( $this, 'validate_class_csv_rows' ),
+			'run'       => function( $rows, $mode, $dry_run ) {
+				return $mode === 'update' ? $this->import_class_csv_rows( $rows, $dry_run ) : $this->unpublish_class_csv_rows( $rows, $dry_run );
+			},
+		);
+		include plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-csv.php';
 
 	}
 
@@ -209,6 +238,21 @@ class CFPA_Booking_System_Admin {
 	}
 
 	/**
+	 * Column headers expected in the schools CSV, mapped to the field they populate.
+	 *
+	 * @return array header (lowercase) => field key
+	 */
+	public function school_csv_columns() {
+		return array(
+			'urn'                            => 'urn',
+			'establishmentname'              => 'title',
+			'establishmenttypegroup (code)'  => 'establishment_type_group_code',
+			'establishmenttypegroup (name)'  => 'establishment_type_group',
+			'location'                       => 'county',
+		);
+	}
+
+	/**
 	 * Read an uploaded CSV into rows keyed by field.
 	 *
 	 * Handles files saved by Excel on Mac (Mac Roman) or Windows (Windows-1252) as well as UTF-8,
@@ -218,7 +262,7 @@ class CFPA_Booking_System_Admin {
 	 * @param array  $columns header => field map, see class_csv_columns()
 	 * @return array|WP_Error rows ( line number => array field => value )
 	 */
-	public function read_class_csv( $path, $columns ) {
+	public function read_csv( $path, $columns ) {
 
 		$raw = file_get_contents( $path );
 		if ( $raw === false || trim( $raw ) === '' ) {
@@ -279,7 +323,7 @@ class CFPA_Booking_System_Admin {
 	/**
 	 * Check every row of the classes CSV before anything is written.
 	 *
-	 * @param array  $rows rows from read_class_csv()
+	 * @param array  $rows rows from read_csv()
 	 * @param string $mode 'update' (new and updated classes) or 'unpublish' (deleted classes)
 	 * @return array line number => array of error messages
 	 */
@@ -367,7 +411,7 @@ class CFPA_Booking_System_Admin {
 	 * as those may be renumbered by the same file.
 	 *
 	 * @param string $class_no class-ref-no to look for
-	 * @param array  $rows     rows from read_class_csv()
+	 * @param array  $rows     rows from read_csv()
 	 * @return array post IDs
 	 */
 	public function find_classes_by_ref_no( $class_no, $rows ) {
@@ -392,9 +436,9 @@ class CFPA_Booking_System_Admin {
 	 * Create or update classes from the "New and Updated Classes" CSV.
 	 * Rows with a blank Id are created; others update the class with that post ID.
 	 *
-	 * @param array $rows    validated rows from read_class_csv()
+	 * @param array $rows    validated rows from read_csv()
 	 * @param bool  $dry_run when true nothing is written, the changes are only reported
-	 * @return array list of changes ( line, action, id, class_no, title, changes )
+	 * @return array list of changes ( line, action, id, ref, title, changes )
 	 */
 	public function import_class_csv_rows( $rows, $dry_run ) {
 
@@ -429,7 +473,7 @@ class CFPA_Booking_System_Admin {
 						'post_type'   => 'class',
 					), true );
 					if ( is_wp_error( $post_id ) ) {
-						$results[] = array( 'line' => $line, 'action' => 'error', 'id' => '', 'class_no' => $row['class-ref-no'], 'title' => $row['title'], 'changes' => array( 'Error' => array( '', $post_id->get_error_message() ) ) );
+						$results[] = array( 'line' => $line, 'action' => 'error', 'id' => '', 'ref' => $row['class-ref-no'], 'title' => $row['title'], 'changes' => array( 'Error' => array( '', $post_id->get_error_message() ) ) );
 						continue;
 					}
 				}
@@ -484,7 +528,7 @@ class CFPA_Booking_System_Admin {
 				'line'     => $line,
 				'action'   => $action,
 				'id'       => $post_id ? $post_id : '',
-				'class_no' => $row['class-ref-no'],
+				'ref'      => $row['class-ref-no'],
 				'title'    => $row['title'],
 				'changes'  => $changes,
 			);
@@ -499,7 +543,7 @@ class CFPA_Booking_System_Admin {
 	 * Remove classes listed in the "Deleted Classes" CSV from the ordering system.
 	 * Classes are set to draft rather than deleted so past invoices and entry reports still resolve them.
 	 *
-	 * @param array $rows    validated rows from read_class_csv()
+	 * @param array $rows    validated rows from read_csv()
 	 * @param bool  $dry_run when true nothing is written
 	 * @return array list of changes, see import_class_csv_rows()
 	 */
@@ -524,9 +568,192 @@ class CFPA_Booking_System_Admin {
 				'line'     => $line,
 				'action'   => $action,
 				'id'       => $post->ID,
-				'class_no' => get_post_meta( $post->ID, 'class-ref-no', true ),
+				'ref'      => get_post_meta( $post->ID, 'class-ref-no', true ),
 				'title'    => $post->post_title,
 				'changes'  => $changes,
+			);
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Check every row of the schools CSV before anything is written.
+	 * Rows repeated exactly are allowed (the second is ignored); a URN repeated with different details is not.
+	 *
+	 * @param array  $rows rows from read_csv()
+	 * @param string $mode unused, schools have one mode
+	 * @return array line number => array of error messages
+	 */
+	public function validate_school_csv_rows( $rows, $mode ) {
+
+		$errors = array();
+		$urns   = array();
+
+		foreach ( $rows as $line => $row ) {
+
+			$row_errors = array();
+
+			if ( ! ctype_digit( $row['urn'] ) ) {
+				$row_errors[] = 'URN "' . $row['urn'] . '" must be a number.';
+			} elseif ( isset( $urns[ $row['urn'] ] ) && $rows[ $urns[ $row['urn'] ] ] !== $row ) {
+				$row_errors[] = 'URN ' . $row['urn'] . ' is also on line ' . $urns[ $row['urn'] ] . ' with different details.';
+			} elseif ( ! isset( $urns[ $row['urn'] ] ) ) {
+				$urns[ $row['urn'] ] = $line;
+			}
+			if ( $row['title'] === '' ) {
+				$row_errors[] = 'EstablishmentName is empty.';
+			}
+			if ( $row['establishment_type_group_code'] !== '' && ! ctype_digit( $row['establishment_type_group_code'] ) ) {
+				$row_errors[] = 'EstablishmentTypeGroup (code) "' . $row['establishment_type_group_code'] . '" must be blank or a number.';
+			}
+
+			if ( $row_errors ) {
+				$errors[ $line ] = $row_errors;
+			}
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * Replace the schools users can choose from with the schools in the CSV, matched on URN.
+	 *
+	 * Schools in the file are created or updated and published. Published schools not in the file
+	 * are set to draft: get_all_schools_data() only offers published schools, while performers
+	 * already linked to them still resolve the title. Their urn meta is kept, as
+	 * remove_duplicate_schools_without_urn_post_meta() deletes schools without one.
+	 *
+	 * @param array $rows    validated rows from read_csv()
+	 * @param bool  $dry_run when true nothing is written
+	 * @return array list of changes ( line, action, id, ref, title, changes )
+	 */
+	public function import_school_csv_rows( $rows, $dry_run ) {
+
+		global $wpdb;
+
+		$meta_keys = array( 'establishment_type_group_code', 'establishment_type_group', 'county' );
+		// Home Schooled, School not listed, No longer in school, see add_special_schools()
+		$protected = array( '999001', '999002', '999003' );
+		$results   = array();
+		$in_file   = array();
+
+		$schools = $wpdb->get_results(
+			"SELECT p.ID, p.post_title, p.post_status, pm.meta_value AS urn
+			FROM {$wpdb->posts} p
+			LEFT JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = 'urn'
+			WHERE p.post_type = 'school' AND p.post_status NOT IN ( 'trash', 'auto-draft' )
+			ORDER BY p.ID"
+		);
+		update_meta_cache( 'post', wp_list_pluck( $schools, 'ID' ) );
+
+		$by_urn = array();
+		foreach ( $schools as $school ) {
+			if ( $school->urn !== null && $school->urn !== '' && ! isset( $by_urn[ $school->urn ] ) ) {
+				$by_urn[ $school->urn ] = $school;
+			}
+		}
+
+		foreach ( $rows as $line => $row ) {
+
+			if ( isset( $in_file[ $row['urn'] ] ) ) {
+				continue;
+			}
+			$in_file[ $row['urn'] ] = true;
+
+			$school  = isset( $by_urn[ $row['urn'] ] ) ? $by_urn[ $row['urn'] ] : null;
+			$changes = array();
+
+			if ( ! $school ) {
+
+				$action  = 'created';
+				$post_id = 0;
+				foreach ( $meta_keys as $key ) {
+					$changes[ $key ] = array( '', $row[ $key ] );
+				}
+
+				if ( ! $dry_run ) {
+					$post_id = wp_insert_post( array(
+						'post_author' => get_current_user_id(),
+						'post_title'  => $row['title'],
+						'post_status' => 'publish',
+						'post_type'   => 'school',
+					), true );
+					if ( is_wp_error( $post_id ) ) {
+						$results[] = array( 'line' => $line, 'action' => 'error', 'id' => '', 'ref' => $row['urn'], 'title' => $row['title'], 'changes' => array( 'Error' => array( '', $post_id->get_error_message() ) ) );
+						continue;
+					}
+					update_post_meta( $post_id, 'urn', $row['urn'] );
+					foreach ( $meta_keys as $key ) {
+						update_post_meta( $post_id, $key, $row[ $key ] );
+					}
+				}
+
+			} else {
+
+				$action  = 'updated';
+				$post_id = (int) $school->ID;
+
+				if ( $school->post_title !== $row['title'] ) {
+					$changes['Title'] = array( $school->post_title, $row['title'] );
+				}
+				if ( $school->post_status !== 'publish' ) {
+					$changes['Status'] = array( $school->post_status, 'publish' );
+				}
+				foreach ( $meta_keys as $key ) {
+					$current = (string) get_post_meta( $post_id, $key, true );
+					if ( $current !== $row[ $key ] ) {
+						$changes[ $key ] = array( $current, $row[ $key ] );
+					}
+				}
+
+				if ( ! $dry_run ) {
+					if ( isset( $changes['Title'] ) || isset( $changes['Status'] ) ) {
+						wp_update_post( array(
+							'ID'          => $post_id,
+							'post_title'  => $row['title'],
+							'post_status' => 'publish',
+						) );
+					}
+					foreach ( $meta_keys as $key ) {
+						if ( isset( $changes[ $key ] ) ) {
+							update_post_meta( $post_id, $key, $row[ $key ] );
+						}
+					}
+				}
+
+				if ( empty( $changes ) ) {
+					$action = 'unchanged';
+				}
+			}
+
+			$results[] = array(
+				'line'    => $line,
+				'action'  => $action,
+				'id'      => $post_id ? $post_id : '',
+				'ref'     => $row['urn'],
+				'title'   => $row['title'],
+				'changes' => $changes,
+			);
+		}
+
+		foreach ( $schools as $school ) {
+			if ( $school->post_status !== 'publish' || isset( $in_file[ (string) $school->urn ] ) || in_array( $school->urn, $protected, true ) ) {
+				continue;
+			}
+			if ( ! $dry_run ) {
+				wp_update_post( array(
+					'ID'          => $school->ID,
+					'post_status' => 'draft',
+				) );
+			}
+			$results[] = array(
+				'line'    => '',
+				'action'  => 'hidden',
+				'id'      => (int) $school->ID,
+				'ref'     => $school->urn,
+				'title'   => $school->post_title,
+				'changes' => array( 'Status' => array( 'publish', 'draft' ) ),
 			);
 		}
 

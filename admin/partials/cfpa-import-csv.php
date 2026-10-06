@@ -1,13 +1,18 @@
 <?php
 /**
- * Import Classes CSV, under Classes > Import CSV.
+ * Shared CSV import screen, used by Classes > Import CSV and Schools > Import CSV.
  *
- * Yearly roll over of the class list. Two files are supported, both using the header
- * Id,Class title,Category,Class no,Class fee,Class min entrants,Class entrants,Class sub category,Lower age,Upper age
- *
- * - New and updated classes: rows with an Id update that class, rows with a blank Id create a new class.
- * - Deleted classes: listed classes are set to draft so they can no longer be entered,
- *   but past invoices and entry reports still resolve them.
+ * Expects $import, set by the calling menu callback:
+ * - title     page heading
+ * - page      admin URL of this screen, relative to wp-admin
+ * - transient prefix for the per-user preview transient
+ * - columns   header => field map passed to read_csv()
+ * - modes     mode => label, a choice is shown when there is more than one
+ * - ref_label heading of the reference column (Class no, URN)
+ * - help      description shown under the file field
+ * - validate  callable( $rows, $mode ) returning line => error messages
+ * - run       callable( $rows, $mode, $dry_run ) returning a list of results
+ *             ( line, action, id, ref, title, changes )
  *
  * The upload is always previewed first; the previewed rows are kept in a transient and
  * only written when "Apply these changes" is pressed.
@@ -17,23 +22,19 @@
  * @subpackage CFPA_Booking_System/admin/partials
  */
 
-$transient_key = 'cfpa_class_import_' . get_current_user_id();
-$modes         = array(
-	'update'    => 'New and updated classes',
-	'unpublish' => 'Deleted classes (remove from ordering)',
-);
+$transient_key = $import['transient'] . get_current_user_id();
 $errors        = array();
 $results       = null;
 $applied       = false;
-$mode          = 'update';
+$mode          = key( $import['modes'] );
 
-if ( isset( $_POST['cfpa_class_import'] ) && current_user_can( 'manage_options' ) ) {
+if ( isset( $_POST['cfpa_csv_import'] ) && current_user_can( 'manage_options' ) ) {
 
-	check_admin_referer( 'cfpa_class_import' );
+	check_admin_referer( 'cfpa_csv_import' );
 
-	if ( $_POST['cfpa_class_import'] === 'preview' ) {
+	if ( $_POST['cfpa_csv_import'] === 'preview' ) {
 
-		$mode = isset( $_POST['mode'] ) && isset( $modes[ $_POST['mode'] ] ) ? $_POST['mode'] : 'update';
+		$mode = isset( $_POST['mode'] ) && isset( $import['modes'][ $_POST['mode'] ] ) ? $_POST['mode'] : $mode;
 		$file = isset( $_FILES['csv_file'] ) ? $_FILES['csv_file'] : null;
 
 		if ( ! $file || $file['error'] !== UPLOAD_ERR_OK || ! is_uploaded_file( $file['tmp_name'] ) ) {
@@ -41,33 +42,33 @@ if ( isset( $_POST['cfpa_class_import'] ) && current_user_can( 'manage_options' 
 		} elseif ( strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'csv' ) {
 			$errors[0] = array( 'The file must be a .csv file.' );
 		} else {
-			$rows = $this->read_class_csv( $file['tmp_name'], $this->class_csv_columns() );
+			$rows = $this->read_csv( $file['tmp_name'], $import['columns'] );
 			if ( is_wp_error( $rows ) ) {
 				$errors[0] = array( $rows->get_error_message() );
 			} else {
-				$errors = $this->validate_class_csv_rows( $rows, $mode );
+				$errors = call_user_func( $import['validate'], $rows, $mode );
 				if ( empty( $errors ) ) {
-					$results = $mode === 'update' ? $this->import_class_csv_rows( $rows, true ) : $this->unpublish_class_csv_rows( $rows, true );
+					$results = call_user_func( $import['run'], $rows, $mode, true );
 					set_transient( $transient_key, array( 'mode' => $mode, 'rows' => $rows, 'file' => $file['name'] ), HOUR_IN_SECONDS );
 				}
 			}
 		}
 
-	} elseif ( $_POST['cfpa_class_import'] === 'apply' ) {
+	} elseif ( $_POST['cfpa_csv_import'] === 'apply' ) {
 
 		$pending = get_transient( $transient_key );
 		if ( ! $pending ) {
 			$errors[0] = array( 'The preview has expired, please upload the file again.' );
 		} else {
 			$mode = $pending['mode'];
-			// re-check in case classes changed since the preview
-			$errors = $this->validate_class_csv_rows( $pending['rows'], $mode );
+			// re-check in case anything changed since the preview
+			$errors = call_user_func( $import['validate'], $pending['rows'], $mode );
 			if ( empty( $errors ) ) {
-				set_time_limit( 300 );
-				$results = $mode === 'update' ? $this->import_class_csv_rows( $pending['rows'], false ) : $this->unpublish_class_csv_rows( $pending['rows'], false );
+				set_time_limit( 600 );
+				$results = call_user_func( $import['run'], $pending['rows'], $mode, false );
 				$applied = true;
 				delete_transient( $transient_key );
-				error_log( 'Classes CSV "' . $pending['file'] . '" (' . $mode . ') applied by user ' . get_current_user_id() );
+				error_log( $import['title'] . ' "' . $pending['file'] . '" (' . $mode . ') applied by user ' . get_current_user_id() );
 			}
 		}
 
@@ -78,6 +79,7 @@ $labels = array(
 	'created'   => 'New',
 	'updated'   => 'Updated',
 	'removed'   => 'Removed from ordering',
+	'hidden'    => 'Hidden from list',
 	'unchanged' => 'Unchanged',
 	'error'     => 'Error',
 );
@@ -85,7 +87,7 @@ $labels = array(
 
 <div class="wrap">
 
-	<h1>Import Classes CSV</h1>
+	<h1><?php echo esc_html( $import['title'] ); ?></h1>
 
 	<?php if ( $errors ) { ?>
 		<div class="notice notice-error">
@@ -116,11 +118,11 @@ $labels = array(
 
 		<?php if ( ! $applied ) { ?>
 			<form method="post">
-				<?php wp_nonce_field( 'cfpa_class_import' ); ?>
-				<input type="hidden" name="cfpa_class_import" value="apply">
+				<?php wp_nonce_field( 'cfpa_csv_import' ); ?>
+				<input type="hidden" name="cfpa_csv_import" value="apply">
 				<p>
 					<?php submit_button( 'Apply these changes', 'primary', 'submit', false ); ?>
-					<a class="button" href="<?php echo esc_url( admin_url( 'edit.php?post_type=class&page=import-classes-csv' ) ); ?>">Cancel</a>
+					<a class="button" href="<?php echo esc_url( admin_url( $import['page'] ) ); ?>">Cancel</a>
 				</p>
 			</form>
 		<?php } ?>
@@ -130,7 +132,7 @@ $labels = array(
 				<tr>
 					<th>Line</th>
 					<th></th>
-					<th>Class no</th>
+					<th><?php echo esc_html( $import['ref_label'] ); ?></th>
 					<th>Title</th>
 					<th>Changes</th>
 				</tr>
@@ -141,13 +143,13 @@ $labels = array(
 						continue;
 					} ?>
 					<tr>
-						<td><?php echo (int) $result['line']; ?></td>
+						<td><?php echo $result['line'] ? (int) $result['line'] : '&ndash;'; ?></td>
 						<td><?php echo esc_html( $labels[ $result['action'] ] ); ?></td>
 						<td>
 							<?php if ( $result['id'] ) { ?>
-								<a href="<?php echo esc_url( get_edit_post_link( $result['id'] ) ); ?>"><?php echo esc_html( $result['class_no'] ); ?></a>
+								<a href="<?php echo esc_url( get_edit_post_link( $result['id'] ) ); ?>"><?php echo esc_html( $result['ref'] ); ?></a>
 							<?php } else {
-								echo esc_html( $result['class_no'] );
+								echo esc_html( $result['ref'] );
 							} ?>
 						</td>
 						<td><?php echo esc_html( $result['title'] ); ?></td>
@@ -168,23 +170,25 @@ $labels = array(
 	<?php if ( $results === null || $applied ) { ?>
 
 		<form method="post" enctype="multipart/form-data">
-			<?php wp_nonce_field( 'cfpa_class_import' ); ?>
-			<input type="hidden" name="cfpa_class_import" value="preview">
+			<?php wp_nonce_field( 'cfpa_csv_import' ); ?>
+			<input type="hidden" name="cfpa_csv_import" value="preview">
 
 			<table class="form-table">
-				<tr>
-					<th scope="row">Type of file</th>
-					<td>
-						<?php foreach ( $modes as $value => $label ) { ?>
-							<label><input type="radio" name="mode" value="<?php echo esc_attr( $value ); ?>" <?php checked( $mode, $value ); ?>> <?php echo esc_html( $label ); ?></label><br>
-						<?php } ?>
-					</td>
-				</tr>
+				<?php if ( count( $import['modes'] ) > 1 ) { ?>
+					<tr>
+						<th scope="row">Type of file</th>
+						<td>
+							<?php foreach ( $import['modes'] as $value => $label ) { ?>
+								<label><input type="radio" name="mode" value="<?php echo esc_attr( $value ); ?>" <?php checked( $mode, $value ); ?>> <?php echo esc_html( $label ); ?></label><br>
+							<?php } ?>
+						</td>
+					</tr>
+				<?php } ?>
 				<tr>
 					<th scope="row"><label for="csv_file">CSV file</label></th>
 					<td>
 						<input type="file" name="csv_file" id="csv_file" accept=".csv">
-						<p class="description">Columns: Id, Class title, Category, Class no, Class fee, Class min entrants, Class entrants, Class sub category, Lower age, Upper age. Leave Id blank for a new class; leave an age blank for no limit.</p>
+						<p class="description"><?php echo esc_html( $import['help'] ); ?></p>
 					</td>
 				</tr>
 			</table>
