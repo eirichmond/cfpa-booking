@@ -168,6 +168,7 @@ class CFPA_Booking_System_Admin {
 		 * @return void
 		 */
 		add_submenu_page( 'edit.php?post_type=school', 'Import Schools CSV', 'Import CSV', 'manage_options', 'import-schools-csv', array( $this, 'cfpa_import_schools_csv') );
+		add_submenu_page( 'edit.php?post_type=school', 'Reset Performer Schools', 'Reset Performer Schools', 'manage_options', 'reset-performer-schools', array( $this, 'cfpa_reset_performer_schools') );
 
 		/**
 		 * addtional items to class custom post type menu
@@ -193,6 +194,36 @@ class CFPA_Booking_System_Admin {
 		);
 		include plugin_dir_path( __FILE__ ) . 'partials/cfpa-import-csv.php';
 
+	}
+
+	/** add additional menu item to school custom post type menu */
+	public function cfpa_reset_performer_schools() {
+		include_once(plugin_dir_path( __FILE__ ) . 'partials/cfpa-reset-performer-schools.php');
+
+	}
+
+	/**
+	 * Number of performers that currently have a Place of Education.
+	 *
+	 * @return int
+	 */
+	public function count_performers_with_school() {
+		global $wpdb;
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}cfpa_children WHERE child_school <> ''" );
+	}
+
+	/**
+	 * Clear the Place of Education on every performer for the new festival year,
+	 * so school age performers must have it re-entered before they can be entered into a class.
+	 * child_school is NOT NULL, so it is set to an empty string.
+	 *
+	 * @return int number of performers cleared
+	 */
+	public function reset_performer_schools() {
+		global $wpdb;
+		$cleared = (int) $wpdb->query( "UPDATE {$wpdb->prefix}cfpa_children SET child_school = '' WHERE child_school <> ''" );
+		error_log( 'Performer schools reset (' . $cleared . ' performers) by user ' . get_current_user_id() );
+		return $cleared;
 	}
 
 	/** add additional menu item to class custom post type menu */
