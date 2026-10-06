@@ -303,7 +303,6 @@ class CFPA_Booking_System {
 		$this->loader->add_action( 'widgets_init', $plugin_public, 'register_cfpa_widgets' );
 
 		$this->loader->add_action( 'init', $plugin_public, 'remove_duplicate_schools_without_urn_post_meta' );
-		$this->loader->add_action( 'delete_classes', $plugin_public, 'delete_classes_callback' );
 
         $this->loader->add_action( 'init', $plugin_public, 'register_shortcodes');
 
