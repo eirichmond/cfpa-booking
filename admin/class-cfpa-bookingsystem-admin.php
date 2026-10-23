@@ -1177,7 +1177,8 @@ class CFPA_Booking_System_Admin {
 		$invoice_ids = wp_list_pluck($invoices, 'ID');
 		$author_ids = array_unique(array_map('intval', wp_list_pluck($invoices, 'post_author')));
 		cache_users($author_ids);
-		$children_by_author = $this->get_report_children($author_ids);
+		$children_by_id = array();
+		$children_by_author = $this->get_report_children($author_ids, $children_by_id);
 		$invoice_totals = $this->get_report_invoice_totals($invoice_ids);
 		$groups_by_author = $this->get_report_groups($author_ids);
 
@@ -1207,12 +1208,15 @@ class CFPA_Booking_System_Admin {
 				$entries[$i]['class_description'] = get_the_title( $inv_item['class_id'] );
 				$entries[$i]['class_fee'] = number_format( intval(get_post_meta( $inv_item['class_id'], 'class-fee', true )) ,2);
 				$performers = $this->performers_as_array($inv_item['performers']);
+				$performer_ids = isset($inv_item['performer_ids']) ? (array) $inv_item['performer_ids'] : array();
 
 				$is_group = $this->check_if_group_class($inv_item['class_id']);
 
 				// the first performer is always output, partners only when present
 				foreach (array_slice($performer_keys, 0, max(1, min(4, count($performers)))) as $n => $key) {
-					$details = $this->get_report_performer_details($authors_children, $performers[$n], $term_year);
+					// orders from 2027 on store performer IDs; older ones are matched by name
+					$by_id = isset($performer_ids[$n], $children_by_id[(int) $performer_ids[$n]]) ? $children_by_id[(int) $performer_ids[$n]] : null;
+					$details = $this->get_report_performer_details($authors_children, $performers[$n], $term_year, $by_id);
 					$entries[$i]['class_performer_' . $key] = $performers[$n];
 					$entries[$i]['class_performer_' . $key . '_school'] = $details['school'];
 					$entries[$i]['class_performer_' . $key . '_dob'] = $details['dob'];
@@ -1256,9 +1260,10 @@ class CFPA_Booking_System_Admin {
 	 * Numeric schools are primed so their titles don't need a query each.
 	 *
 	 * @param array $author_ids user IDs
+	 * @param array $by_id      filled with child ID => performer row, for orders that store performer IDs
 	 * @return array user ID => normalised name => performer row
 	 */
-	public function get_report_children($author_ids) {
+	public function get_report_children($author_ids, &$by_id = array()) {
 		global $wpdb;
 		$author_ids = array_map('intval', $author_ids);
 		$children = $wpdb->get_results(
@@ -1271,6 +1276,7 @@ class CFPA_Booking_System_Admin {
 		$by_author = array();
 		$school_ids = array();
 		foreach ($children as $child) {
+			$by_id[(int) $child->child_id] = $child;
 			$name = $this->normalise_performer_name($child->child_name);
 			if (!isset($by_author[$child->user_id][$name])) {
 				$by_author[$child->user_id][$name] = $child;
@@ -1290,11 +1296,11 @@ class CFPA_Booking_System_Admin {
 	 * @param array  $authors_children normalised name => performer row, from get_report_children()
 	 * @param string $name             performer name from the invoice item
 	 * @param string $term_year        year of the 31st August the age is taken at
+	 * @param object $child            the performer row when the invoice item stores its ID, otherwise matched by name
 	 * @return array school, dob, age, email
 	 */
-	public function get_report_performer_details($authors_children, $name, $term_year) {
-		$child = null;
-		if ($name !== null && $name !== '') {
+	public function get_report_performer_details($authors_children, $name, $term_year, $child = null) {
+		if (!$child && $name !== null && $name !== '') {
 			$normalised = $this->normalise_performer_name($name);
 			$child = isset($authors_children[$normalised]) ? $authors_children[$normalised] : null;
 		}

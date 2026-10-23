@@ -3846,6 +3846,12 @@ class CFPA_Booking_System_Public {
 				}
 				$array[$i]['performers'] = join(', ', $performers);
 			}
+
+			// keep the performer IDs in the same order as the names, so reports can tell apart two performers with the same name
+			if (isset($basket['class_id'], $basket['child_id']) && !isset($basket['group_id'])) {
+				$xchildren = isset($basket['xchildren']) ? (array) $basket['xchildren'] : array();
+				$array[$i]['performer_ids'] = array_map('intval', array_merge(array($basket['child_id']), $xchildren));
+			}
 			$i++;
 		}
 
