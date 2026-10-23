@@ -127,9 +127,7 @@ get_header(); ?>
 
 							<input type="hidden" name="user_id" value="<?php echo get_current_user_id(); ?>">
 							<?php wp_nonce_field( 'purchase_cfpa', 'purchase_nonce' ); ?>
-							<div class="poa">
-								<input type="submit" value="Pay on account">
-							</div>
+							<input type="submit" class="button" value="Pay on account">
 
 						</form>
 					<?php } ?>
