@@ -3285,6 +3285,24 @@
 	padding: 0 10px
 }
 
+/* links on the green notice: #0a2e0a on #7fbf7f is about 7:1 (WCAG AA needs 4.5:1) */
+.cfparow .user-profile .success a,
+.cfparow .user-profile .success a:visited,
+.cfparow .user-profile .successreg a,
+.cfparow .user-profile .successreg a:visited {
+	color: #0a2e0a;
+	font-weight: bold;
+	text-decoration: underline
+}
+
+.cfparow .user-profile .success a:hover,
+.cfparow .user-profile .success a:focus,
+.cfparow .user-profile .successreg a:hover,
+.cfparow .user-profile .successreg a:focus {
+	color: #000;
+	text-decoration: none
+}
+
 .cfparow .user-profile .add-child-trig,
 .cfparow .user-profile .add-children-trig,
 .cfparow .user-profile .add-group-trig,

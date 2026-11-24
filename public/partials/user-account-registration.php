@@ -25,7 +25,9 @@ get_header(); ?>
 
 					<?php the_title( '<h1 class="entry-title">', '</h1>' ); ?>
 
-					<p>Please fill in the form below to register your account.</p>
+					<?php if ( empty( $_GET['registered'] ) ) { ?>
+						<p>Please fill in the form below to register your account.</p>
+					<?php } ?>
 
 					<hr />
 
