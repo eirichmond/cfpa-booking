@@ -447,11 +447,10 @@ class CFPA_Booking_System_Public {
 			)
 		);
 		$age = $this->get_performers_age($performer[0]->child_dob);
-		$lower_age = get_post_meta($_POST["classid"], 'lower-age', true);
 		$upper_age = get_post_meta($_POST["classid"], 'upper-age', true);
 
-		// a blank age limit means no limit, as in get_qualifying_classes()
-		$outside_age = ( ! empty($lower_age) && $age < intval($lower_age) ) || ( ! empty($upper_age) && $age > intval($upper_age) );
+		// this dropdown is only for performers 2, 3 and 4, who skip the minimum age check
+		$outside_age = self::partner_outside_age( $age, $upper_age );
 		// the Place of Education is only required under 17, as in get_qualifying_classes_by_id()
 		$missing_school = $age < 17 && $performer[0]->child_school == '';
 
@@ -464,6 +463,22 @@ class CFPA_Booking_System_Public {
 		}
 
 
+	}
+
+	/**
+	 * Whether an additional performer (2, 3 or 4 in a duet, trio or quartet) is too old for a class.
+	 *
+	 * Additional performers have no minimum age, so a younger partner can join, e.g. an 11 year
+	 * old with a 12 year old in a 12 year old class. They are only too old when their age is
+	 * over (not equal to) the upper age. A blank or zero upper age means no limit.
+	 * Performer 1 is still filtered on both limits by get_qualifying_classes().
+	 *
+	 * @param int        $age       the performer's age from get_performers_age().
+	 * @param int|string $upper_age the class's upper-age meta.
+	 * @return bool
+	 */
+	public static function partner_outside_age( $age, $upper_age ) {
+		return ! empty( $upper_age ) && intval( $age ) > intval( $upper_age );
 	}
 
 	/**
@@ -2459,15 +2474,16 @@ class CFPA_Booking_System_Public {
 		return $q_age;
 	}
 
-	public function get_performers_age($dob) {
+	public function get_performers_age($dob, $today = 'today') {
 
-		$now = new DateTime('today');
-		$august_this_year = new DateTime('31st August this year');
+		// ages are taken on 31 August of the school year the festival falls in
+		$now = new DateTime($today);
+		$august_this_year = new DateTime('31st August ' . $now->format('Y'));
 
 		if($now < $august_this_year) {
-			$term_year = date('Y',strtotime('last year'));
+			$term_year = intval($now->format('Y')) - 1;
 		} else {
-			$term_year = date('Y',strtotime('today'));
+			$term_year = $now->format('Y');
 		}
 
 		$term_year = new DateTime('31st August ' . $term_year);
