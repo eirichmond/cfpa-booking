@@ -227,7 +227,7 @@ get_header(); ?>
 						<?php } /* if not then tell the user */ else { ?>
 
 							<h1>No performers in your account!</h1>
-							<p>It doesn't look like you've added any performers yet, you can add performers, including yourself <a href="/add-performer/">here</a></p>
+							<p>It doesn't look like you've added any performers yet. You can add performers, including yourself, <a href="<?php echo esc_url( home_url( '/cfpa-user/add-performer/' ) ); ?>">here</a></p>
 
 						<?php } ?>
 
