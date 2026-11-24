@@ -1537,6 +1537,11 @@ class CFPA_Booking_System_Admin {
 
 	public function cfpa_login_extra_note($message) {
 
+		// after a password reset request only show the "check your email" notice, not "Create an account"
+		if ( isset( $_GET['checkemail'] ) && 'confirm' === $_GET['checkemail'] ) {
+			return;
+		}
+
 		//var_dump($_GET);
 		if (isset($_GET) && $_GET['action'] == 'rp') {
 			$message = '<p class="message reset-pass">Enter a memorable password below or use suggested, then click "Reset Password"</p>';
