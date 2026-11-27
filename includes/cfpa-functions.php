@@ -182,7 +182,7 @@ function custom_text_change($translated_text, $text, $domain) {
         $translated_text = 'Email Address or Username<br/ >(i.e. first name, then space, then surname)';
     }
     if ($text === 'Check your email for the confirmation link, then visit the <a href="%s">login page</a>.') {
-        $translated_text = 'Check your email for the confirmation link, then visit the <a href="%s">login page</a>.<br />The email may end up in your Junk/ Spam mail folder, so please be sure to check there if it is not in your inbox.';
+        $translated_text = 'Check your email for the password reset link, then visit the <a href="%s">login page</a>.<br />The email may end up in your Junk/ Spam mail folder, so please be sure to check there if it is not in your inbox.';
     }
     return $translated_text;
 }
