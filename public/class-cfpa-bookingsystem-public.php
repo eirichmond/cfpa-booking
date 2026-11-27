@@ -81,7 +81,8 @@ class CFPA_Booking_System_Public {
 		 * class.
 		 */
 
-		wp_enqueue_style( $this->CFPA_Booking_System, plugin_dir_url( __FILE__ ) . 'css/cfpa-bookingsystem-public.css', array(), $this->version, 'all' );
+		// versioned by file time so browsers pick up CSS changes after a deploy
+		wp_enqueue_style( $this->CFPA_Booking_System, plugin_dir_url( __FILE__ ) . 'css/cfpa-bookingsystem-public.css', array(), filemtime( plugin_dir_path( __FILE__ ) . 'css/cfpa-bookingsystem-public.css' ), 'all' );
 
 
 	}
